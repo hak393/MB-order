@@ -1,0 +1,111 @@
+/* Container styling */
+.home-container {
+  padding: 20px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f8f9fa;
+  min-height: 100vh;
+  color: #333;
+}
+
+/* Headings */
+.home-container h2 {
+  color: #333;
+  margin-bottom: 20px;
+}
+
+/* Input fields */
+.home-container input,
+.home-container select {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 1rem;
+  margin-bottom: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Flex layout for input groups */
+.home-flex-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+/* Button styles */
+.home-container button {
+  padding: 10px 16px;
+  font-size: 1rem;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: background-color 0.3s ease;
+}
+
+.home-container button:hover {
+  background-color: #0056b3;
+}
+
+/* Table styling */
+.home-container table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  background-color: white;
+}
+
+.home-container th,
+.home-container td {
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  text-align: left;
+}
+
+.home-container th {
+  background-color: #e9ecef;
+}
+
+.home-container td button {
+  margin-right: 5px;
+  padding: 5px 10px;
+  font-size: 0.9rem;
+  background-color: #28a745;
+}
+
+.home-container td button:hover {
+  background-color: #218838;
+}
+
+/* Secondary buttons (delete) */
+.home-container td button:last-child {
+  background-color: #dc3545;
+}
+
+.home-container td button:last-child:hover {
+  background-color: #c82333;
+}
+
+/* Place Order button */
+.home-container .place-order-btn {
+  background-color: #17a2b8;
+}
+
+.home-container .place-order-btn:hover {
+  background-color: #138496;
+}
+
+/* Responsive inputs */
+@media (min-width: 600px) {
+  .home-flex-row > * {
+    flex: 1;
+  }
+
+  .home-container input[type='number'],
+  .home-container input[type='text'] {
+    width: auto;
+  }
+}
