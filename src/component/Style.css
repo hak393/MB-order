@@ -297,6 +297,42 @@ button:hover {
   line-height: 30px;
   border-radius: 5px;
 }
+
+/* Container fix: prevent table overflow */
+.order-card {
+  overflow-x: auto; /* Add horizontal scroll if needed */
+  padding: 10px;    /* Some padding around content */
+  box-sizing: border-box;
+}
+
+/* Responsive table */
+.order-card table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 0; /* Prevent min-width forcing overflow */
+}
+
+/* Optional: keep table cells from shrinking too much */
+.order-card table th,
+.order-card table td {
+  white-space: nowrap; /* Prevent line breaks inside cells */
+  padding: 6px 8px;
+  text-align: left;
+}
+
+/* Media query for smaller screens */
+@media (max-width: 600px) {
+  .order-card {
+    padding: 8px 5px;
+  }
+  
+  .order-card table th,
+  .order-card table td {
+    padding: 4px 6px;
+    font-size: 14px; /* Smaller font for narrow screens */
+  }
+}
+
 .modal-box.two-column {
   width: 500px;
   background: #fff;
@@ -877,7 +913,7 @@ input[list] {
 }
 
 /* Hide hamburger and mobile menu on desktop */
-@media (min-width: 769px) {
+@media (min-width: 569px) {
   .hamburger-menu {
     display: none;
   }
@@ -888,8 +924,98 @@ input[list] {
 }
 
 /* Hide desktop buttons on small screens */
-@media (max-width: 768px) {
+@media (max-width: 568px) {
   .header-controls {
     display: none;
   }
+}
+
+/* Ensure the container does not overflow */
+.orderpage-container {
+  padding: 10px;
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow-x: hidden; /* prevent horizontal scroll on whole page */
+}
+
+/* Allow horizontal scroll on the table container, not the whole page */
+.pending-group {
+  margin-bottom: 30px;
+  overflow-x: auto; /* enable horizontal scroll if table is wide */
+  -webkit-overflow-scrolling: touch; /* smooth scrolling on mobile */
+  border: 1px solid #ddd;
+  padding: 8px;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+/* Table styles */
+.orders-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 600px; /* set a min-width so columns don't squish too much */
+}
+
+.orders-table th,
+.orders-table td {
+  border: 1px solid #ccc;
+  padding: 6px 8px;
+  white-space: nowrap; /* keep data on one line */
+  text-align: left;
+  font-size: 14px;
+}
+
+/* Responsive tweaks for small screens */
+@media (max-width: 600px) {
+  /* Reduce padding */
+  .orderpage-container {
+    padding: 5px;
+  }
+  
+  .pending-group {
+    padding: 5px;
+    border: none;
+    background: transparent;
+  }
+  
+  .orders-table {
+    min-width: 500px;
+    font-size: 12px;
+  }
+  
+  .orders-table th,
+  .orders-table td {
+    padding: 4px 6px;
+  }
+  
+  /* If you have a menu button (hamburger or nav), ensure it's on top */
+  .menu-button {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 1000;
+    /* size & padding can be adjusted */
+    width: 36px;
+    height: 36px;
+    background: #333;
+    color: white;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Optional: scrollbar styling on .pending-group (horizontal scroll) */
+.pending-group::-webkit-scrollbar {
+  height: 6px;
+}
+
+.pending-group::-webkit-scrollbar-thumb {
+  background: #bbb;
+  border-radius: 3px;
+}
+
+.pending-group::-webkit-scrollbar-track {
+  background: #f0f0f0;
 }
