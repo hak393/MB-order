@@ -1019,3 +1019,196 @@ input[list] {
 .pending-group::-webkit-scrollbar-track {
   background: #f0f0f0;
 }
+
+
+
+
+
+/* View items css */
+
+/* View Items Container */
+.view-items-container {
+  max-width: 600px;
+  margin: 0 auto;
+  background: #ffffff;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  font-family: Arial, sans-serif;
+}
+
+/* Page Title */
+.view-items-container h2 {
+  text-align: center;
+  color: #333;
+  margin-bottom: 20px;
+  font-weight: 700;
+  font-size: 28px;
+}
+
+/* Dropdown Select */
+.view-items-select {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 15px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background-color: #f9f9f9;
+  transition: border-color 0.2s;
+}
+
+.view-items-select:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+/* Customer Section */
+.customer-section {
+  margin-top: 15px;
+}
+
+/* Search Bar */
+.customer-search {
+  width: 100%;
+  padding: 12px 18px;
+  font-size: 16px;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin-bottom: 12px;
+}
+
+.customer-search:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 6px #007bff;
+  outline: none;
+}
+
+/* Customer List */
+.customer-list {
+  background: #fafafa;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.customer-item {
+  padding: 10px 15px;
+  border-bottom: 1px solid #e5e5e5;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.customer-item:last-child {
+  border-bottom: none;
+}
+
+.customer-item:hover {
+  background-color: #f1f1f1;
+}
+
+/* Strong name + city style */
+.customer-item strong {
+  color: #333;
+  font-size: 15px;
+}
+
+.customer-item span {
+  color: #777;
+  font-size: 13px;
+}
+
+/* Loading and empty text */
+.customer-section p {
+  text-align: center;
+  color: #555;
+}
+
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+  min-width: 300px;
+}
+
+
+/* Style.css */
+@media (max-width: 600px) {
+  .edit-overlay-container {
+    padding: 10px !important;
+  }
+  .edit-overlay-inner {
+    padding: 10px !important;
+    border-radius: 4px !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+  }
+  .edit-overlay-inner table {
+    min-width: 400px !important;
+  }
+  .edit-overlay-inner input {
+    width: 100% !important;
+    box-sizing: border-box;
+  }
+}
+
+
+/* select date in sell order */
+
+.date-picker-container {
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.date-picker-container label {
+  font-weight: bold;
+  font-size: 16px;
+  margin-right: 10px;
+}
+
+.date-picker-container input[type="date"] {
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 16px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.3s;
+}
+
+.date-picker-container input[type="date"]:focus {
+  border-color: #007BFF;
+}
+
+
+/* add product dropbox */
+.product-dropdown-display {
+  border: 1px solid #ccc;
+  background-color: #f9f9f9;
+  max-height: 120px;
+  overflow-y: auto;
+  margin-top: 5px;
+  padding: 5px;
+  border-radius: 5px;
+}
+
+.product-item-display {
+  padding: 3px 5px;
+  font-size: 14px;
+  color: #333;
+}

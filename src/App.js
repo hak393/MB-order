@@ -16,6 +16,8 @@ import Header from './component/Header';
 import Extra from './component/Extra';
 import AddProduct from './component/AddProduct';
 import SellOrder from './component/SaleOrder';
+import ViewItems from './component/ViewItems';
+import EditAddProduct from './component/EditAddProduct'; // ✅ new import
 
 const PrivateRoute = ({ element, loggedIn }) => {
   const hasUser = localStorage.getItem('userName');
@@ -110,6 +112,9 @@ function App() {
             element={<PrivateRoute loggedIn={loggedIn} element={<Extra />} />}
           />
           <Route path="*" element={<Navigate to="/" />} />
+
+          <Route path="/view-items" element={<ViewItems />} />
+          <Route path="/edit-add-product" element={<EditAddProduct />} />
         </Routes>
       </LayoutWithHeader>
     </Router>

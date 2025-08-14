@@ -74,7 +74,17 @@ const OrderPage = () => {
       try {
         const r = await fetch(`${URL}/products.json`), d = await r.json();
         if (!d) return setProdSuggestions([]);
-        let suggestions = Object.values(d).filter(p => p.name?.toLowerCase().includes(productName.toLowerCase())).map(p => ({ name: p.name, qty: p.qty || 1, unit: p.unit || 'pcs', price: null, less: null }));
+        let searchTerm = productName.toLowerCase().replace(/\s+/g, ''); // remove spaces
+        let suggestions = Object.values(d)
+          .filter(p => p.name?.toLowerCase().replace(/\s+/g, '').includes(searchTerm))
+          .map(p => ({
+            name: p.name,
+            qty: p.qty || 1,
+            unit: p.unit || 'pcs',
+            price: null,
+            less: null
+          }));
+
         if (custName?.trim()) {
           const sellRes = await fetch(`${URL}/sellOrders.json`), sellData = await sellRes.json();
           if (sellData) {
@@ -82,7 +92,12 @@ const OrderPage = () => {
             custOrders.forEach(order => {
               if (Array.isArray(order.items)) {
                 order.items.forEach(item => {
-                  const match = suggestions.find(s => s.name.toLowerCase().trim() === item.productName?.toLowerCase().trim() || s.name.toLowerCase().trim().includes(item.productName?.toLowerCase().trim()) || item.productName?.toLowerCase().trim().includes(s.name.toLowerCase().trim()));
+                  const match = suggestions.find(s =>
+                    s.name.toLowerCase().replace(/\s+/g, '') === item.productName?.toLowerCase().replace(/\s+/g, '') ||
+                    s.name.toLowerCase().replace(/\s+/g, '').includes(item.productName?.toLowerCase().replace(/\s+/g, '')) ||
+                    item.productName?.toLowerCase().replace(/\s+/g, '').includes(s.name.toLowerCase().replace(/\s+/g, ''))
+                  );
+
                   if (match) { match.price = item.price || null; match.less = item.less || null; }
                 });
               }
@@ -152,7 +167,17 @@ const OrderPage = () => {
       ? (lessVal ? `${lessVal} %` : '')
       : lessUnit; // for NET, pair, Full Bill, half Bill
 
-    const newItem = { productName, unit: selectedProdUnit, less, qty: finalQty, weight, price, packQty: selectedProdQty };
+    const newItem = {
+      productName,
+      unit: selectedProdUnit,
+      less,
+      qty: finalQty,
+      weight,
+      price,
+      packQty: selectedProdQty,
+      packet: qty // <-- Raw Qty value
+    };
+
 
     if (editing) {
       if (editing.source === 'pending') setPendingOrders(p => p.map((x, i) => i === editing.index ? { ...x, ...newItem } : x));
@@ -215,19 +240,19 @@ const OrderPage = () => {
       const newItems = customers[c]?.items || [];
 
       const pendingOrderRows = normalizedPending.map(
-  ({ productName, qty, unit, weight, price, less, packQty }) => ({
-    productName,
-    qty,
-    unit,
-    weight: weight || '',
-    price: price || '',
-    less:
-      (typeof less === 'number' || (typeof less === 'string' && !isNaN(Number(less))))
-        ? `${less}%`
-        : (less || ''),
-    packQty: packQty || ''
-  })
-);
+        ({ productName, qty, unit, weight, price, less, packQty }) => ({
+          productName,
+          qty,
+          unit,
+          weight: weight || '',
+          price: price || '',
+          less:
+            (typeof less === 'number' || (typeof less === 'string' && !isNaN(Number(less))))
+              ? `${less}%`
+              : (less || ''),
+          packQty: packQty || ''
+        })
+      );
 
 
       const items = newItems.map(
@@ -364,8 +389,17 @@ const OrderPage = () => {
             </div>
             <table>
               <thead>
-                <tr><th>Product</th><th>Qty</th><th>Weight</th><th>Price</th><th>Less</th><th>Actions</th></tr>
+                <tr>
+                  <th>Product</th>
+                  <th>Qty</th>
+                  <th>Weight</th>
+                  <th>Price</th>
+                  <th>Less</th>
+                  <th>Packet</th> {/* Moved Packet to the end */}
+                  <th>Actions</th>
+                </tr>
               </thead>
+
               <tbody>
                 {pendingOrders.map((item, i) => (
                   <tr key={i} className="pending-row">
@@ -375,10 +409,10 @@ const OrderPage = () => {
                     <td>₹{item.price}</td>
                     <td>
                       {item.less
-                        ? (item.less.endsWith('%') ? item.less : item.less) // shows NET, pair, Full Bill, half Bill as-is
+                        ? (item.less.endsWith('%') ? item.less : item.less)
                         : '-'}
                     </td>
-
+                    <td>{item.packet ?? '-'}</td> {/* Packet column at end */}
                     <td>
                       <button onClick={() => handleEdit('pending', i)}>Edit</button>
                       <button onClick={() => deletePendingItem(i)}>Delete</button>
@@ -386,6 +420,7 @@ const OrderPage = () => {
                     </td>
                   </tr>
                 ))}
+
                 {newItemsList.map((item, i) => (
                   <tr key={`new-${i}`}>
                     <td>{item.productName}</td>
@@ -393,12 +428,14 @@ const OrderPage = () => {
                     <td>{item.weight || '-'}</td>
                     <td>₹{item.price}</td>
                     <td>{item.less || '-'}</td>
+                    <td>{item.packet ?? '-'}</td> {/* Packet column at end */}
                     <td>
                       <button onClick={() => handleEdit('new', i)}>Edit</button>
                       <button onClick={() => deleteNewItem(i)}>Delete</button>
                     </td>
                   </tr>
                 ))}
+
               </tbody>
             </table>
             <button onClick={() => placeOrder(custName)}>Place Order</button>
