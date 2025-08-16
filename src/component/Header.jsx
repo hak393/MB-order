@@ -79,7 +79,7 @@ const Header = ({ onLogout }) => {
   <button onClick={() => handleNavigate('/view-orders')} className="view-orders-btn">View Orders</button>
   <button onClick={() => handleNavigate('/pending-orders')} className="view-orders-btn">Pending Orders</button>
   <button onClick={() => handleNavigate('/view-items')} className="view-orders-btn">View Items</button>
-  <button onClick={() => handleNavigate('/edit-add-product')} className="view-orders-btn">Add Product</button> {/* NEW BUTTON */}
+  <button onClick={() => handleNavigate('/edit-add-product')} className="view-orders-btn">Edit Product</button> {/* NEW BUTTON */}
 
   {isAllowedUser && (
     <>

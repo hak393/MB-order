@@ -4,8 +4,9 @@ import './Style.css';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue, set, push, remove } from 'firebase/database';
 
-const firebaseConfig = { databaseURL: "https://mb-order-3764e-default-rtdb.firebaseio.com"
- };
+const firebaseConfig = {
+  databaseURL: "https://mb-order-3764e-default-rtdb.firebaseio.com"
+};
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
@@ -77,8 +78,8 @@ const ViewOrder = () => {
       const sell = +i.sellQty;
       if (isNaN(sell) || sell < 0) return alert('Please enter valid Sell Qty for all items.');
       if (!i.price || !i.less) return alert('Price and Less fields are required for all items.');
-      if (sell > avail) return alert('Sell Qty cannot be greater than Available Qty.');
     }
+
 
     const processed = items.map(i => ({
       ...i,
@@ -131,9 +132,9 @@ const ViewOrder = () => {
   };
   const cleanProductName = n => n.replace(/\s*\([^)]*\)/g, '').trim();
   const printSoldItems = (customerName, city, sold) => {
-  const date = new Date().toLocaleDateString();
-  const w = window.open('', '_blank', 'width=800,height=600');
-  const html = `
+    const date = new Date().toLocaleDateString();
+    const w = window.open('', '_blank', 'width=800,height=600');
+    const html = `
   <html>
   <head>
     <title>Sold Items</title>
@@ -157,11 +158,10 @@ const ViewOrder = () => {
             <td>${cleanProductName(i.productName)}</td>
             <td>${i.soldQty}</td>
             <td>${i.weight || '-'}</td>
-            <td>${
-              (typeof i.less === 'number' || (typeof i.less === 'string' && !isNaN(Number(i.less))))
-                ? i.less + '%'
-                : (i.less || '-')
-            }</td>
+            <td>${(typeof i.less === 'number' || (typeof i.less === 'string' && !isNaN(Number(i.less))))
+        ? i.less + '%'
+        : (i.less || '-')
+      }</td>
             <td>₹${i.price}</td>
           </tr>
         `).join('')}
@@ -175,9 +175,9 @@ const ViewOrder = () => {
     </script>
   </body>
   </html>`;
-  w.document.write(html);
-  w.document.close();
-};
+    w.document.write(html);
+    w.document.close();
+  };
 
   // --- Edit and Delete for normal order rows ---
   const startEditRow = (orderKey, item, rowIndex) => {
@@ -277,16 +277,46 @@ const ViewOrder = () => {
     }, { onlyOnce: true });
   };
   const previewAndPrint = ({ user, customerName, orderData, orderId }) => {
-  const w = window.open('', '_blank', 'width=800,height=600');
-  const html = `
+    const w = window.open('', '_blank', 'width=800,height=600');
+
+    const combinedRows = [
+      ...(orderData.pendingOrderRows || []).map(r => ({ ...r, isPending: true })),
+      ...(orderData.items || []).map(r => ({ ...r, isPending: false }))
+    ];
+
+    const html = `
   <html>
   <head>
       <title>Print</title>
       <style>
-          body { font-family: Arial; padding: 20px; }
-          h2 { text-align: center; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th, td { border: 1px solid #000; padding: 8px; text-align: center; }
+          @page {
+            size: A5;
+            margin: 10mm;
+          }
+          body {
+            font-family: Arial;
+            padding: 20px;
+            transform: scale(0.85);
+            transform-origin: top left;
+          }
+          h2 {
+            text-align: center;
+            margin-bottom: 10px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 12px;
+          }
+          th, td {
+            border: 1px solid #000;
+            padding: 6px;
+            text-align: center;
+          }
+          thead {
+            display: table-header-group; /* ✅ Repeat header on every page */
+          }
           .pending-row {
             font-weight: bold;
             font-style: italic;
@@ -297,62 +327,55 @@ const ViewOrder = () => {
       </style>
   </head>
   <body>
-      <h2>Order Summary</h2>
-      <div><strong>User:</strong> ${user}</div>
-      <div><strong>Customer:</strong> ${customerName}</div>
-      <div><strong>City:</strong> ${orderData.city}</div>
-      <div><strong>Placed On:</strong> ${orderData.timestamp}</div>
       <table>
-          <thead>
-              <tr><th>Product</th><th>Qty</th><th>Weight</th><th>Less</th><th>Price</th></tr>
-          </thead>
-          <tbody>
-  ${(orderData.items || []).map(i => `
-      <tr>
-          <td>${cleanProductName(i.productName)}</td>
-          <td>${i.originalQty || i.qty} ${i.unit || ''}</td>
-          <td>${i.weight || '-'}</td>
-          <td>${
-            (typeof i.less === 'number' || (typeof i.less === 'string' && !isNaN(Number(i.less))))
-              ? i.less + '%'
-              : (i.less || '-')
-          }</td>
-          <td>₹${i.price}</td>
-      </tr>
-  `).join('')}
-
-  ${(orderData.pendingOrderRows || []).map(i => `
-      <tr class="pending-row">
-          <td>${cleanProductName(i.productName)}</td>
-          <td>${i.originalQty || i.qty} ${i.unit || ''}</td>
-          <td>${i.weight || '-'}</td>
-          <td>${
-            (typeof i.less === 'number' || (typeof i.less === 'string' && !isNaN(Number(i.less))))
-              ? i.less + '%'
-              : (i.less || '-')
-          }</td>
-          <td>₹${i.price}</td>
-      </tr>
-  `).join('')}
-</tbody>
-
-      <script>
-          window.onload = () => {
-              window.print();
-              window.onafterprint = () => {
-                  if (window.opener && typeof window.opener.deleteOrderFromFirebase === 'function') {
-                      window.opener.deleteOrderFromFirebase('${user}', '${customerName}', '${orderId}');
-                  }
-                  window.close();
-              };
-          };
-      </script>
+        <thead>
+            <tr>
+                <th colspan="7">
+                    <h2>Order Summary</h2>
+                    <div><strong>User:</strong> ${user}</div>
+                    <div><strong>Customer:</strong> ${customerName}</div>
+                    <div><strong>City:</strong> ${orderData.city}</div>
+                    <div><strong>Placed On:</strong> ${orderData.timestamp}</div>
+                </th>
+            </tr>
+            <tr>
+                <th>SR NO.</th>
+                <th>Product</th>
+                <th>Qty</th>
+                <th>Weight</th>
+                <th>Less</th>
+                <th>Price</th>
+                <th>Packet</th>
+            </tr>
+        </thead>
+        <tbody>
+          ${combinedRows.map((i, index) => `
+              <tr class="${i.isPending ? 'pending-row' : ''}">
+                  <td>${index + 1}</td>
+                  <td>${cleanProductName(i.productName)}</td>
+                  <td>${i.originalQty || i.qty} ${i.unit || ''}</td>
+                  <td>${i.weight || '-'}</td>
+                  <td>${(typeof i.less === 'number' || (typeof i.less === 'string' && !isNaN(Number(i.less))))
+        ? i.less + '%'
+        : (i.less || '-')
+      }</td>
+                  <td>₹${i.price}</td>
+                  <td>${i.packet || '-'}</td>
+              </tr>
+          `).join('')}
+        </tbody>
+      </table>
   </body>
   </html>
   `;
-  w.document.write(html);
-  w.document.close();
-};
+
+    w.document.write(html);
+    w.document.close();
+    w.print();
+  };
+
+
+
 
   window.deleteOrderFromFirebase = (user, customerName, orderId) => {
     const orderRef = ref(db, `orders/${user}/${customerName}/${orderId}`);
@@ -379,6 +402,8 @@ const ViewOrder = () => {
               </div>
               {isAuthorizedUser(userName) && (
                 <div className="order-action">
+                  <button>Add</button> {/* ✅ New Add button */}
+
                   <button onClick={() => handleSellOrder(user, customerName, orderData, orderId)}>Sell</button>
 
                   <button style={{ marginTop: '10px' }} onClick={() => previewAndPrint({ user, customerName, orderData })}>Print</button>
@@ -388,19 +413,23 @@ const ViewOrder = () => {
             <table>
               <thead>
                 <tr>
+                  <th>SR NO.</th> {/* New SR NO. column */}
                   <th>Product</th>
                   <th>Qty</th>
                   <th>Weight</th>
                   <th>Less</th>
                   <th>Price</th>
+                  <th>Packet</th> {/* New Packet column */}
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {/* Pending order rows with edit/delete */}
-                {(orderData.pendingOrderRows || []).map((item, i) =>
-                  editingRow.orderKey === key && editingRow.rowIndex === i && editingRow.isPending ? (
+                {(orderData.pendingOrderRows || []).map((item, i) => {
+                  const srNo = i + 1; // SR number for pending
+                  return editingRow.orderKey === key && editingRow.rowIndex === i && editingRow.isPending ? (
                     <tr key={`pending-edit-${i}`}>
+                      <td>{srNo}</td>
                       <td>{editedItem.productName}</td> {/* productName NOT editable */}
                       <td>
                         <input
@@ -436,17 +465,27 @@ const ViewOrder = () => {
                         />
                       </td>
                       <td>
+                        <input
+                          type="text"
+                          value={editedItem.packet || ''}
+                          onChange={e => setEditedItem({ ...editedItem, packet: e.target.value })}
+                          style={{ width: '60px', fontSize: '14px' }}
+                        />
+                      </td>
+                      <td>
                         <button onClick={() => savePendingRowEdit(user, orderId, i)}>Save</button>
                         <button onClick={() => setEditingRow({ orderKey: null, rowIndex: null, isPending: false })}>Cancel</button>
                       </td>
                     </tr>
                   ) : (
                     <tr key={`pending-${i}`} className="pending-row">
+                      <td>{srNo}</td>
                       <td>{item.productName}</td>
                       <td>{item.qty} {item.unit}</td>
                       <td>{item.weight || '-'}</td>
                       <td>{item.less || '-'}</td>
                       <td>₹{item.price}</td>
+                      <td>{item.packet || '-'}</td> {/* Show packet */}
                       <td>
                         {(isAuthorizedUser(userName) || userName === user) && (
                           <>
@@ -456,13 +495,15 @@ const ViewOrder = () => {
                         )}
                       </td>
                     </tr>
-                  )
-                )}
+                  );
+                })}
 
                 {/* Normal order items */}
-                {(orderData.items || []).map((item, i) =>
-                  editingRow.orderKey === key && editingRow.rowIndex === i && !editingRow.isPending ? (
+                {(orderData.items || []).map((item, i) => {
+                  const srNo = (orderData.pendingOrderRows?.length || 0) + i + 1; // Continue numbering after pending
+                  return editingRow.orderKey === key && editingRow.rowIndex === i && !editingRow.isPending ? (
                     <tr key={i}>
+                      <td>{srNo}</td>
                       <td>{editedItem.productName}</td> {/* productName is NOT editable */}
                       <td>
                         <input
@@ -498,17 +539,27 @@ const ViewOrder = () => {
                         />
                       </td>
                       <td>
+                        <input
+                          type="text"
+                          value={editedItem.packet || ''}
+                          onChange={e => setEditedItem({ ...editedItem, packet: e.target.value })}
+                          style={{ width: '60px', fontSize: '14px' }}
+                        />
+                      </td>
+                      <td>
                         <button onClick={() => saveRowEdit(user, orderId, i)}>Save</button>
                         <button onClick={() => setEditingRow({ orderKey: null, rowIndex: null, isPending: false })}>Cancel</button>
                       </td>
                     </tr>
                   ) : (
                     <tr key={i}>
+                      <td>{srNo}</td>
                       <td>{item.productName}</td>
                       <td>{item.originalQty || item.qty} {item.unit}</td>
                       <td>{item.weight || '-'}</td>
                       <td>{item.less || '-'}</td>
                       <td>₹{item.price}</td>
+                      <td>{item.packet || '-'}</td> {/* Show packet */}
                       <td>
                         {(isAuthorizedUser(userName) || userName === user) && (
                           <>
@@ -518,10 +569,12 @@ const ViewOrder = () => {
                         )}
                       </td>
                     </tr>
-                  )
-                )}
+                  );
+                })}
               </tbody>
             </table>
+
+
           </div>
         ))
       )}
@@ -549,29 +602,29 @@ const ViewOrder = () => {
                   <th>Available Qty</th>
                   <th>Sell Qty</th>
                   <th>Weight</th>
+                  <th>KG Rate</th>
                   <th>Price</th>
                   <th>Less</th>
+                  <th>Packet</th>
                 </tr>
               </thead>
               <tbody>
                 {(editOrderData.items || []).map((item, idx) => {
-                  const avail = +item.qty,
-                    sell = +item.sellQty || 0,
-                    showRemark = sell > avail;
                   return (
                     <tr key={idx} className={item.isPending ? 'pending-row' : ''}>
                       <td>{item.productName}</td>
                       <td>{item.qty} {item.unit}</td>
-                      <td style={{ position: 'relative' }}>
-                        {showRemark && <div style={{ color: 'red', fontSize: '12px', marginBottom: '2px' }}>Greater than available qty</div>}
+                      <td>
                         <input
                           type="number"
+                          min="0"
                           value={item.sellQty}
                           style={{ width: '80px' }}
                           required
                           onChange={e => {
+                            const value = e.target.value < 0 ? 0 : e.target.value;
                             const up = [...editOrderData.items];
-                            up[idx].sellQty = e.target.value;
+                            up[idx].sellQty = value;
                             setEditOrderData({ ...editOrderData, items: up });
                           }}
                         />
@@ -584,6 +637,27 @@ const ViewOrder = () => {
                           onChange={e => {
                             const up = [...editOrderData.items];
                             up[idx].weight = e.target.value;
+                            setEditOrderData({ ...editOrderData, items: up });
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          value={item.kgRate || ''}
+                          style={{ width: '70px' }}
+                          onChange={e => {
+                            const value = e.target.value < 0 ? 0 : e.target.value;
+                            const up = [...editOrderData.items];
+                            up[idx].kgRate = value;
+
+                            const weight = parseFloat(up[idx].weight) || 0;
+                            const sellQty = parseFloat(up[idx].sellQty) || 1;
+                            if (value && weight && sellQty > 0) {
+                              up[idx].price = Math.ceil((value * weight) / sellQty);
+                            }
+
                             setEditOrderData({ ...editOrderData, items: up });
                           }}
                         />
@@ -614,6 +688,18 @@ const ViewOrder = () => {
                           }}
                         />
                       </td>
+                      <td>
+                        <input
+                          type="text"
+                          value={item.packet || ''}
+                          style={{ width: '70px' }}
+                          onChange={e => {
+                            const up = [...editOrderData.items];
+                            up[idx].packet = e.target.value;
+                            setEditOrderData({ ...editOrderData, items: up });
+                          }}
+                        />
+                      </td>
                     </tr>
                   );
                 })}
@@ -630,6 +716,7 @@ const ViewOrder = () => {
                 paddingTop: '10px',
               }}
             >
+            
               <button onClick={saveEdit} style={{ marginRight: '10px' }}>
                 Sell Order
               </button>
@@ -638,6 +725,8 @@ const ViewOrder = () => {
           </div>
         </div>
       )}
+
+
     </div>
   );
 };

@@ -4,6 +4,7 @@ import './Style.css';
 const URL = 'https://mb-order-3764e-default-rtdb.firebaseio.com/';
 
 const OrderPage = () => {
+  const [transportName, setTransportName] = useState('');
   const [userName, setUserName] = useState(''),
     [custName, setCustName] = useState(''),
     [city, setCity] = useState('');
@@ -28,6 +29,7 @@ const OrderPage = () => {
   const [justSelectedCustomer, setJustSelectedCustomer] = useState(false),
     [highlightedCustIndex, setHighlightedCustIndex] = useState(-1),
     [highlightedProdIndex, setHighlightedProdIndex] = useState(-1);
+
 
   const refDebCust = useRef(null),
     refDebProd = useRef(null),
@@ -123,10 +125,20 @@ const OrderPage = () => {
   const handleCustomerChange = e => { setCustName(e.target.value); setJustSelectedCustomer(false); };
   const handleCustomerKeyDown = e => {
     if (!suggestions.length) return;
-    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightedCustIndex(p => (p + 1) % suggestions.length); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightedCustIndex(p => (p <= 0 ? suggestions.length - 1 : p - 1)); }
-    else if (e.key === 'Enter' && highlightedCustIndex >= 0) { e.preventDefault(); selectCustomer(suggestions[highlightedCustIndex].name, suggestions[highlightedCustIndex].city); }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedCustIndex(p => (p + 1) % suggestions.length);
+    }
+    else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedCustIndex(p => (p <= 0 ? suggestions.length - 1 : p - 1));
+    }
+    else if ((e.key === 'Enter' || e.key === 'Tab') && highlightedCustIndex >= 0) {
+      e.preventDefault();
+      selectCustomer(suggestions[highlightedCustIndex].name, suggestions[highlightedCustIndex].city);
+    }
   };
+
 
   const selectProduct = p => {
     setProductName(`${p.name} (${p.qty})`);
@@ -142,10 +154,20 @@ const OrderPage = () => {
   };
   const handleProductKeyDown = e => {
     if (!prodSuggestions.length) return;
-    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightedProdIndex(p => (p + 1) % prodSuggestions.length); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightedProdIndex(p => (p <= 0 ? prodSuggestions.length - 1 : p - 1)); }
-    else if (e.key === 'Enter' && highlightedProdIndex >= 0) { e.preventDefault(); selectProduct(prodSuggestions[highlightedProdIndex]); }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedProdIndex(p => (p + 1) % prodSuggestions.length);
+    }
+    else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedProdIndex(p => (p <= 0 ? prodSuggestions.length - 1 : p - 1));
+    }
+    else if ((e.key === 'Enter' || e.key === 'Tab') && highlightedProdIndex >= 0) {
+      e.preventDefault();
+      selectProduct(prodSuggestions[highlightedProdIndex]);
+    }
   };
+
 
   const handleCustomerBlur = () => { if (!validCustomer) setCustomerError(true); };
   const handleProductBlur = () => { if (!validProduct) setProductError(true); };
@@ -222,10 +244,13 @@ const OrderPage = () => {
         body: JSON.stringify({
           customerName: c.trim(),
           city: city.trim(),
+          transportName: transportName.trim(),  // added here
           timestamp: new Date().toLocaleString(),
           items: [],
           pendingOrderRows: []
         })
+
+
       });
 
       const newCustData = await newCustRes.json();
@@ -240,41 +265,47 @@ const OrderPage = () => {
       const newItems = customers[c]?.items || [];
 
       const pendingOrderRows = normalizedPending.map(
-        ({ productName, qty, unit, weight, price, less, packQty }) => ({
-          productName,
-          qty,
-          unit,
-          weight: weight || '',
-          price: price || '',
-          less:
-            (typeof less === 'number' || (typeof less === 'string' && !isNaN(Number(less))))
-              ? `${less}%`
-              : (less || ''),
-          packQty: packQty || ''
-        })
-      );
+  ({ productName, qty, unit, weight, price, less, packQty, packet }) => ({
+    productName,
+    qty,
+    unit,
+    weight: weight || '',
+    price: price || '',
+    less:
+      (typeof less === 'number' || (typeof less === 'string' && !isNaN(Number(less))))
+        ? `${less}%`
+        : (less || ''),
+    packQty: packQty || '',
+    packet: packet ?? '' // ✅ Store packet value
+  })
+);
+
 
 
       const items = newItems.map(
-        ({ productName, qty, unit, weight, price, less, packQty }) => ({
-          productName,
-          qty,
-          unit,
-          weight: weight || '',
-          price: price || '',
-          less: less || '',
-          packQty: packQty || ''
-        })
-      );
+  ({ productName, qty, unit, weight, price, less, packQty, packet }) => ({
+    productName,
+    qty,
+    unit,
+    weight: weight || '',
+    price: price || '',
+    less: less || '',
+    packQty: packQty || '',
+    packet: packet ?? '' // ✅ Store packet value
+  })
+);
+
 
       // 3️⃣ Merge data with just-created entry
       const bodyToSend = {
         customerName: c.trim(),
         city: city.trim(),
+        transportName: transportName.trim(),  // added here
         timestamp: new Date().toLocaleString(),
         items,
         pendingOrderRows
       };
+
 
       await fetch(`${URL}/orders/${userName}/${customerId}.json`, {
         method: 'PATCH',
@@ -302,6 +333,8 @@ const OrderPage = () => {
     setWeight(''); setPrice(''); setCustomers({}); setPendingOrders([]); setEditing(null); setValidCustomer(false);
     setValidProduct(false); setCustomerError(false); setProductError(false); setSelectedProdQty(1); setSelectedProdUnit('pcs');
     customerInputRef.current?.focus();
+    setTransportName('');
+
   };
 
   const handleEdit = (type, index) => {
@@ -344,6 +377,7 @@ const OrderPage = () => {
           <input placeholder="Customer Name" value={custName} onChange={handleCustomerChange} onKeyDown={handleCustomerKeyDown} onBlur={handleCustomerBlur} className={customerError ? 'input-error' : ''} ref={customerInputRef} />
           {suggestions.length > 0 && <ul className="suggestions-dropdown" ref={customerListRef}>{suggestions.map((s, i) => <li key={i} className={i === highlightedCustIndex ? 'highlighted' : ''} onClick={() => selectCustomer(s.name, s.city)}>{s.name} — {s.city}</li>)}</ul>}
         </div>
+
         <input placeholder="City" value={city} onChange={e => setCity(e.target.value)} />
         <div className="autocomplete-wrapper" style={{ position: 'relative' }}>
           <input placeholder="Product" value={productName} onChange={e => setProductName(e.target.value)} onKeyDown={handleProductKeyDown} onBlur={handleProductBlur} autoComplete="off" className={productError ? 'input-error' : ''} ref={productInputRef} />
@@ -375,6 +409,12 @@ const OrderPage = () => {
           <option value="Full Bill">Full Bill</option>
           <option value="half Bill">Half Bill</option>
         </select>
+        <input
+          placeholder="Transport Name"
+          value={transportName}
+          onChange={(e) => setTransportName(e.target.value)}
+        />
+
 
 
         <button onClick={addOrUpdate}>{editing ? 'Update' : 'Add'}</button>
@@ -390,12 +430,13 @@ const OrderPage = () => {
             <table>
               <thead>
                 <tr>
+                  <th>Sr No</th> {/* New column */}
                   <th>Product</th>
                   <th>Qty</th>
                   <th>Weight</th>
                   <th>Price</th>
                   <th>Less</th>
-                  <th>Packet</th> {/* Moved Packet to the end */}
+                  <th>Packet</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -403,6 +444,7 @@ const OrderPage = () => {
               <tbody>
                 {pendingOrders.map((item, i) => (
                   <tr key={i} className="pending-row">
+                    <td>{i + 1}</td> {/* Sr No */}
                     <td>{item.productName}</td>
                     <td>{`${item.qty ?? item.remainingQty} ${item.unit}`}</td>
                     <td>{item.weight || '-'}</td>
@@ -412,7 +454,7 @@ const OrderPage = () => {
                         ? (item.less.endsWith('%') ? item.less : item.less)
                         : '-'}
                     </td>
-                    <td>{item.packet ?? '-'}</td> {/* Packet column at end */}
+                    <td>{item.packet ?? '-'}</td>
                     <td>
                       <button onClick={() => handleEdit('pending', i)}>Edit</button>
                       <button onClick={() => deletePendingItem(i)}>Delete</button>
@@ -423,21 +465,22 @@ const OrderPage = () => {
 
                 {newItemsList.map((item, i) => (
                   <tr key={`new-${i}`}>
+                    <td>{pendingOrders.length + i + 1}</td> {/* Continue numbering after pending orders */}
                     <td>{item.productName}</td>
                     <td>{`${item.qty} ${item.unit}`}</td>
                     <td>{item.weight || '-'}</td>
                     <td>₹{item.price}</td>
                     <td>{item.less || '-'}</td>
-                    <td>{item.packet ?? '-'}</td> {/* Packet column at end */}
+                    <td>{item.packet ?? '-'}</td>
                     <td>
                       <button onClick={() => handleEdit('new', i)}>Edit</button>
                       <button onClick={() => deleteNewItem(i)}>Delete</button>
                     </td>
                   </tr>
                 ))}
-
               </tbody>
             </table>
+
             <button onClick={() => placeOrder(custName)}>Place Order</button>
           </div>
         </div>
