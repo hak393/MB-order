@@ -1,6 +1,6 @@
 // src/component/PendingPage.jsx
 import React, { useEffect, useState } from 'react';
-import { database } from '../firebase/firebase';  // Import from singleton
+import { database } from '../firebase/firebase'; 
 import { ref, onValue, remove } from 'firebase/database';
 import './Style.css';
 
@@ -21,9 +21,7 @@ const PendingPage = () => {
       const grouped = {};
       list.forEach(order => {
         const key = `${order.customerName} (${order.city || 'Unknown'})`;
-        if (!grouped[key]) {
-          grouped[key] = [];
-        }
+        if (!grouped[key]) grouped[key] = [];
         grouped[key].push(order);
       });
 
@@ -137,14 +135,15 @@ const PendingPage = () => {
                 <div><strong>CUSTOMER NAME:</strong> {customerName}</div>
                 <div><strong>CITY:</strong> {city}</div>
               </div>
-              <table className="orders-table">
+              <table className="orders-table compact-table">
                 <thead>
                   <tr>
                     <th>Product</th>
                     <th>Qty</th>
                     <th>Weight</th>
-                    <th>Price</th>
                     <th>Less</th>
+                    <th>Price</th>
+                    <th>Packet</th>
                     <th>Time</th>
                     <th>Action</th>
                   </tr>
@@ -155,8 +154,9 @@ const PendingPage = () => {
                       <td>{order.productName}</td>
                       <td>{`${order.remainingQty} ${order.unit}`}</td>
                       <td>{order.weight || '-'}</td>
-                      <td>₹{order.price}</td>
                       <td>{formatLess(order.less)}</td>
+                      <td>₹{order.price}</td>
+                      <td>{order.packet || '-'}</td>
                       <td>{formatTimestamp(order.timestamp)}</td>
                       <td>
                         <button

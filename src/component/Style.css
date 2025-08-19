@@ -965,6 +965,8 @@ input[list] {
   font-size: 14px;
 }
 
+
+
 /* Responsive tweaks for small screens */
 @media (max-width: 600px) {
   /* Reduce padding */

@@ -74,42 +74,40 @@ const Header = ({ onLogout }) => {
 
         {/* Desktop buttons */}
         {/* Desktop buttons */}
-<div className="header-controls">
-  <button onClick={() => handleNavigate('/order')} className="view-orders-btn">Order Page</button>
-  <button onClick={() => handleNavigate('/view-orders')} className="view-orders-btn">View Orders</button>
-  <button onClick={() => handleNavigate('/pending-orders')} className="view-orders-btn">Pending Orders</button>
-  <button onClick={() => handleNavigate('/view-items')} className="view-orders-btn">View Items</button>
-  <button onClick={() => handleNavigate('/edit-add-product')} className="view-orders-btn">Edit Product</button> {/* NEW BUTTON */}
+        <div className="header-controls">
+          <button onClick={() => handleNavigate('/order')} className="view-orders-btn">Order Page</button>
+          <button onClick={() => handleNavigate('/view-orders')} className="view-orders-btn">View Orders</button>
+          <button onClick={() => handleNavigate('/pending-orders')} className="view-orders-btn">Pending Orders</button>
+          <button onClick={() => handleNavigate('/view-items')} className="view-orders-btn">View Items</button>
+          {isAllowedUser && (
+            <>
+              <button onClick={() => handleNavigate('/user-handle')} className="view-orders-btn">User Handle</button>
+              <button onClick={() => handleNavigate('/add-product')} className="view-orders-btn">Add Product</button>
+              <button onClick={() => handleNavigate('/sell-order')} className="view-orders-btn">Sell Order</button>
+            </>
+          )}
 
-  {isAllowedUser && (
-    <>
-      <button onClick={() => handleNavigate('/user-handle')} className="view-orders-btn">User Handle</button>
-      <button onClick={() => handleNavigate('/add-product')} className="view-orders-btn">Add Product</button>
-      <button onClick={() => handleNavigate('/sell-order')} className="view-orders-btn">Sell Order</button>
-    </>
-  )}
+          <button onClick={handleLogout} className="logout-btn">Logout</button>
+        </div>
 
-  <button onClick={handleLogout} className="logout-btn">Logout</button>
-</div>
+        {/* Slide menu for mobile */}
+        <nav className={`mobile-slide-menu ${menuOpen ? 'open' : ''}`}>
+          <button onClick={() => handleNavigate('/order')} className="slide-menu-btn">Order Page</button>
+          <button onClick={() => handleNavigate('/view-orders')} className="slide-menu-btn">View Orders</button>
+          <button onClick={() => handleNavigate('/pending-orders')} className="slide-menu-btn">Pending Orders</button>
+          <button onClick={() => handleNavigate('/view-items')} className="slide-menu-btn">View Items</button>
+          <button onClick={() => handleNavigate('/edit-add-product')} className="slide-menu-btn">Add Product</button> {/* NEW BUTTON */}
 
-{/* Slide menu for mobile */}
-<nav className={`mobile-slide-menu ${menuOpen ? 'open' : ''}`}>
-  <button onClick={() => handleNavigate('/order')} className="slide-menu-btn">Order Page</button>
-  <button onClick={() => handleNavigate('/view-orders')} className="slide-menu-btn">View Orders</button>
-  <button onClick={() => handleNavigate('/pending-orders')} className="slide-menu-btn">Pending Orders</button>
-  <button onClick={() => handleNavigate('/view-items')} className="slide-menu-btn">View Items</button>
-  <button onClick={() => handleNavigate('/edit-add-product')} className="slide-menu-btn">Add Product</button> {/* NEW BUTTON */}
+          {isAllowedUser && (
+            <>
+              <button onClick={() => handleNavigate('/user-handle')} className="slide-menu-btn">User Handle</button>
+              <button onClick={() => handleNavigate('/add-product')} className="slide-menu-btn">Add Product</button>
+              <button onClick={() => handleNavigate('/sell-order')} className="slide-menu-btn">Sell Order</button>
+            </>
+          )}
 
-  {isAllowedUser && (
-    <>
-      <button onClick={() => handleNavigate('/user-handle')} className="slide-menu-btn">User Handle</button>
-      <button onClick={() => handleNavigate('/add-product')} className="slide-menu-btn">Add Product</button>
-      <button onClick={() => handleNavigate('/sell-order')} className="slide-menu-btn">Sell Order</button>
-    </>
-  )}
-
-  <button onClick={handleLogout} className="slide-menu-btn logout-btn">Logout</button>
-</nav>
+          <button onClick={handleLogout} className="slide-menu-btn logout-btn">Logout</button>
+        </nav>
 
 
         {/* Hamburger icon for mobile */}

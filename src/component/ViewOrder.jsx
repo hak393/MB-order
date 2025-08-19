@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import './Style.css';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue, set, push, remove } from 'firebase/database';
+import { update, get } from "firebase/database";
+import OrderPage from './OrderPage';  // ✅ Import component
+import EditAddProduct from './EditAddProduct';
 
 const firebaseConfig = {
   databaseURL: "https://mb-order-3764e-default-rtdb.firebaseio.com"
@@ -15,6 +18,9 @@ const ViewOrder = () => {
   const [userName, setUserName] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editOrderData, setEditOrderData] = useState(null);
+  const [transportName, setTransportName] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false); // ✅ New state
+
 
   // Editing row info now includes isPending flag for pending rows
   const [editingRow, setEditingRow] = useState({ orderKey: null, rowIndex: null, isPending: false });
@@ -47,22 +53,60 @@ const ViewOrder = () => {
           });
         });
       }
-      flat.sort((a, b) => new Date(b.orderData.timestamp) - new Date(a.orderData.timestamp));
+      flat.sort((a, b) => new Date(b.orderData.timestamp) + new Date(a.orderData.timestamp));
       setOrders(flat);
     });
 
+    // ✅ fetch transport name if editing an order
+    const fetchTransportName = async () => {
+      if (storedUser && editOrderData?.orderId) {
+        try {
+          const snapshot = await get(ref(db, `orders/${storedUser}/${editOrderData.orderId}/transportName`));
+          if (snapshot.exists()) {
+            setTransportName(snapshot.val());
+          }
+        } catch (error) {
+          console.error("Error fetching transportName:", error);
+        }
+      }
+    };
+    fetchTransportName();
+
     return () => unsub();
-  }, [navigate]);
+  }, [navigate, editOrderData]);
 
   // Existing functions ...
 
   // Replace the existing handleSellOrder function with this:
 
   const handleSellOrder = (user, customerName, orderData, orderId) => {
-    const normalItems = (orderData.items || []).map(i => ({ ...i, sellQty: '', isPending: false }));
-    const pendingItems = (orderData.pendingOrderRows || []).map(i => ({ ...i, sellQty: '', isPending: true }));
-    const combinedItems = [...normalItems, ...pendingItems];
-    setEditOrderData({ user, customerName, city: orderData.city, items: combinedItems, orderId }); // <-- Added orderId here
+    // Normal items
+    const normalItems = (orderData.items || []).map(i => ({
+      ...i,
+      sellQty: i.soldQty ?? i.sellQty ?? "", // ✅ Take soldQty first, then existing sellQty, else empty
+      isPending: false
+    }));
+
+    // Pending items
+    const pendingItems = (orderData.pendingOrderRows || []).map(i => ({
+      ...i,
+      sellQty: i.soldQty ?? i.sellQty ?? "", // ✅ Same logic for pending
+      isPending: true
+    }));
+
+    // ✅ Pending items first
+    const combinedItems = [...pendingItems, ...normalItems];
+
+
+    setEditOrderData({
+      user,
+      customerName,
+      city: orderData.city,
+      items: combinedItems,
+      orderId,
+      orderData // ✅ keep original for save
+    });
+
     setShowModal(true);
   };
 
@@ -71,7 +115,7 @@ const ViewOrder = () => {
   // Replace saveEdit function with this updated version:
 
   const saveEdit = async () => {
-    const { user, customerName, city, items, orderId } = editOrderData; // <-- Added orderId here
+    const { user, customerName, city, items, orderId } = editOrderData;
 
     for (const i of items) {
       const avail = +i.qty || 0;
@@ -80,15 +124,19 @@ const ViewOrder = () => {
       if (!i.price || !i.less) return alert('Price and Less fields are required for all items.');
     }
 
+    // ✅ Filter out items with sellQty = 0
+    const processed = items
+      .filter(i => +i.sellQty > 0)
+      .map(i => ({
+        ...i,
+        originalQty: +i.qty,
+        soldQty: +i.sellQty,
+        remainingQty: +i.qty - +i.sellQty
+      }));
 
-    const processed = items.map(i => ({
-      ...i,
-      originalQty: +i.qty,
-      soldQty: +i.sellQty,
-      remainingQty: +i.qty - +i.sellQty
-    }));
 
-    printSoldItems(customerName, city, processed);
+    // ✅ Now this will fetch phone from Firebase and then print
+    await handlePrint(customerName, city, processed, transportName);
 
     await push(ref(db, 'sellOrders'), {
       user,
@@ -102,7 +150,8 @@ const ViewOrder = () => {
         unit: i.unit,
         weight: i.weight,
         price: i.price,
-        less: i.less
+        less: i.less,
+        packet: i.packet
       }))
     });
 
@@ -119,19 +168,21 @@ const ViewOrder = () => {
           weight: i.weight || '',
           price: i.price,
           less: i.less || '',
+          packet: i.packet || '',
           timestamp: new Date().toISOString()
         });
       }
     });
 
-    // ✅ Delete the specific order using unique ID
     await remove(ref(db, `orders/${user}/${orderId}`));
 
     setOrders(p => p.filter(o => !(o.user === user && o.orderId === orderId)));
     setShowModal(false);
   };
+
   const cleanProductName = n => n.replace(/\s*\([^)]*\)/g, '').trim();
-  const printSoldItems = (customerName, city, sold) => {
+
+  const printSoldItems = (customerName, city, sold, phoneNumber, transportName) => {
     const date = new Date().toLocaleDateString();
     const w = window.open('', '_blank', 'width=800,height=600');
     const html = `
@@ -147,25 +198,28 @@ const ViewOrder = () => {
   <body>
     <div><strong>Customer:</strong> ${customerName}</div>
     <div><strong>City:</strong> ${city}</div>
+    <div><strong>Phone:</strong> ${phoneNumber || '-'}</div>
+    <div><strong>Transport:</strong> ${transportName || '-'}</div>  <!-- ✅ added transport -->
     <div><strong>Date:</strong> ${date}</div>
     <table>
       <thead>
-        <tr><th>Product</th><th>Sold Qty</th><th>Weight</th><th>Less</th><th>Price</th></tr>
+        <tr><th>Product</th><th>Sold Qty</th><th>Weight</th><th>Less</th><th>Price</th><th>Packet</th></tr>
       </thead>
       <tbody>
-        ${(sold || []).map(i => `
-          <tr>
-            <td>${cleanProductName(i.productName)}</td>
-            <td>${i.soldQty}</td>
-            <td>${i.weight || '-'}</td>
-            <td>${(typeof i.less === 'number' || (typeof i.less === 'string' && !isNaN(Number(i.less))))
+  ${(sold || []).map(i => `
+    <tr>
+      <td>${cleanProductName(i.productName)}</td>
+      <td>${i.soldQty} ${i.unit || ''}</td>  <!-- ✅ show sold qty with unit -->
+      <td>${i.weight || '-'}</td>
+      <td>${(typeof i.less === 'number' || (typeof i.less === 'string' && !isNaN(Number(i.less))))
         ? i.less + '%'
         : (i.less || '-')
       }</td>
-            <td>₹${i.price}</td>
-          </tr>
-        `).join('')}
-      </tbody>
+      <td>₹${i.price}</td>
+      <td>${i.packet || '-'}</td>  <!-- ✅ show packet -->
+    </tr>
+  `).join('')}
+</tbody>
     </table>
     <script>
       window.onload = () => {
@@ -178,12 +232,41 @@ const ViewOrder = () => {
     w.document.write(html);
     w.document.close();
   };
+  const handlePrint = async (customerName, city, sold) => {
+    try {
+      const snapshot = await get(ref(db, "customers"));
+      let phoneNumber = "-";
+
+      if (snapshot.exists()) {
+        const customers = snapshot.val();
+        for (let key in customers) {
+          if (customers[key].name === customerName) {
+            phoneNumber = customers[key].number || "-";
+            break;
+          }
+        }
+      }
+
+      printSoldItems(customerName, city, sold, phoneNumber, transportName);
+    } catch (err) {
+      console.error("Error fetching phone:", err);
+      printSoldItems(customerName, city, sold, "-");
+    }
+  };
 
   // --- Edit and Delete for normal order rows ---
   const startEditRow = (orderKey, item, rowIndex) => {
     setEditingRow({ orderKey, rowIndex, isPending: false });
-    setEditedItem({ ...item });
+    setEditedItem({
+      productName: item.productName || '',   // ✅ include product name
+      qty: item.qty || 0,
+      weight: item.weight || '',             // ✅ fixed typo
+      less: item.less || '',
+      price: item.price || '',
+      packet: item.packet || ''
+    });
   };
+
   const saveRowEdit = async (user, orderId, idx) => {
     const orderRef = ref(db, `orders/${user}/${orderId}/items`);
     onValue(orderRef, async snap => {
@@ -345,7 +428,7 @@ const ViewOrder = () => {
                 <th>Weight</th>
                 <th>Less</th>
                 <th>Price</th>
-                <th>Packet</th>
+                <th>Packet</th> <!-- ✅ Added -->
             </tr>
         </thead>
         <tbody>
@@ -385,16 +468,36 @@ const ViewOrder = () => {
       })
       .catch(err => console.error('Error deleting order:', err));
   };
+
+
+  // add order data
+ // --- Function inside ViewOrder ---
+const handleAddOrder = async (orderId) => {
+  try {
+    // Save orderId into addOrder
+    await set(ref(db, `addOrder/${orderId}`), true);
+
+    // Open modal with OrderPage
+    setShowAddModal(true);
+  } catch (err) {
+    console.error("Error adding order:", err);
+  }
+};
+
+
+
+  
   return (
     <div className="orderpage-container">
       <h2 style={{ textAlign: 'center' }}>VIEW ORDERS</h2>
       {orders.length === 0 ? (
         <p style={{ textAlign: 'center' }}>No orders found.</p>
       ) : (
-        orders.map(({ key, user, orderId, customerName, orderData }) => (
+        orders.map(({ key, user, orderId, customerName, orderData }, index) => (
           <div key={key} className="order-card new">
             <div className="order-header">
               <div>
+                <strong>Order No.: {index + 1} </strong><br />
                 <strong>User:</strong> {user} <br />
                 <strong>Customer:</strong> {customerName} <br />
                 <strong>City:</strong> {orderData.city} <br />
@@ -402,10 +505,11 @@ const ViewOrder = () => {
               </div>
               {isAuthorizedUser(userName) && (
                 <div className="order-action">
-                  <button>Add</button> {/* ✅ New Add button */}
+                  {/* ✅ Change Add button to open modal */}
+                  <button onClick={() => handleAddOrder(orderId)}>Add</button>
+
 
                   <button onClick={() => handleSellOrder(user, customerName, orderData, orderId)}>Sell</button>
-
                   <button style={{ marginTop: '10px' }} onClick={() => previewAndPrint({ user, customerName, orderData })}>Print</button>
                 </div>
               )}
@@ -413,18 +517,19 @@ const ViewOrder = () => {
             <table>
               <thead>
                 <tr>
-                  <th>SR NO.</th> {/* New SR NO. column */}
+                  <th>SR NO.</th>
                   <th>Product</th>
                   <th>Qty</th>
+                  <th>Sold Qty</th> {/* ✅ Added Sold Qty Column */}
                   <th>Weight</th>
                   <th>Less</th>
                   <th>Price</th>
-                  <th>Packet</th> {/* New Packet column */}
+                  <th>Packet</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {/* Pending order rows with edit/delete */}
+                {/* ---------------- PENDING ORDER ROWS ---------------- */}
                 {(orderData.pendingOrderRows || []).map((item, i) => {
                   const srNo = i + 1; // SR number for pending
                   return editingRow.orderKey === key && editingRow.rowIndex === i && editingRow.isPending ? (
@@ -440,6 +545,10 @@ const ViewOrder = () => {
                         />{' '}
                         {editedItem.unit}
                       </td>
+                      <td>
+                        {editedItem.sellQty || 0} {editedItem.unit}
+                      </td>
+
                       <td>
                         <input
                           type="text"
@@ -474,7 +583,9 @@ const ViewOrder = () => {
                       </td>
                       <td>
                         <button onClick={() => savePendingRowEdit(user, orderId, i)}>Save</button>
-                        <button onClick={() => setEditingRow({ orderKey: null, rowIndex: null, isPending: false })}>Cancel</button>
+                        <button onClick={() => setEditingRow({ orderKey: null, rowIndex: null, isPending: false })}>
+                          Cancel
+                        </button>
                       </td>
                     </tr>
                   ) : (
@@ -482,10 +593,11 @@ const ViewOrder = () => {
                       <td>{srNo}</td>
                       <td>{item.productName}</td>
                       <td>{item.qty} {item.unit}</td>
+                      <td>{item.sellQty || 0} {item.unit}</td> {/* ✅ Sold Qty with Unit */}
                       <td>{item.weight || '-'}</td>
                       <td>{item.less || '-'}</td>
                       <td>₹{item.price}</td>
-                      <td>{item.packet || '-'}</td> {/* Show packet */}
+                      <td>{item.packet || '-'}</td>
                       <td>
                         {(isAuthorizedUser(userName) || userName === user) && (
                           <>
@@ -498,13 +610,13 @@ const ViewOrder = () => {
                   );
                 })}
 
-                {/* Normal order items */}
+                {/* ---------------- NORMAL ORDER ITEMS ---------------- */}
                 {(orderData.items || []).map((item, i) => {
                   const srNo = (orderData.pendingOrderRows?.length || 0) + i + 1; // Continue numbering after pending
                   return editingRow.orderKey === key && editingRow.rowIndex === i && !editingRow.isPending ? (
-                    <tr key={i}>
+                    <tr key={`normal-edit-${i}`}>
                       <td>{srNo}</td>
-                      <td>{editedItem.productName}</td> {/* productName is NOT editable */}
+                      <td>{editedItem.productName}</td> {/* productName NOT editable */}
                       <td>
                         <input
                           type="number"
@@ -513,6 +625,10 @@ const ViewOrder = () => {
                           style={{ width: '70px', fontSize: '14px' }}
                         />{' '}
                         {editedItem.unit}
+                      </td>
+                      <td>
+                        {/* sellQty is NOT editable */}
+                        {editedItem.sellQty || 0} {editedItem.unit}
                       </td>
                       <td>
                         <input
@@ -548,18 +664,21 @@ const ViewOrder = () => {
                       </td>
                       <td>
                         <button onClick={() => saveRowEdit(user, orderId, i)}>Save</button>
-                        <button onClick={() => setEditingRow({ orderKey: null, rowIndex: null, isPending: false })}>Cancel</button>
+                        <button onClick={() => setEditingRow({ orderKey: null, rowIndex: null, isPending: false })}>
+                          Cancel
+                        </button>
                       </td>
                     </tr>
                   ) : (
-                    <tr key={i}>
+                    <tr key={`normal-${i}`}>
                       <td>{srNo}</td>
                       <td>{item.productName}</td>
                       <td>{item.originalQty || item.qty} {item.unit}</td>
+                      <td>{item.sellQty || 0} {item.unit}</td> {/* ✅ Show Sold Qty */}
                       <td>{item.weight || '-'}</td>
                       <td>{item.less || '-'}</td>
                       <td>₹{item.price}</td>
-                      <td>{item.packet || '-'}</td> {/* Show packet */}
+                      <td>{item.packet || '-'}</td>
                       <td>
                         {(isAuthorizedUser(userName) || userName === user) && (
                           <>
@@ -578,6 +697,36 @@ const ViewOrder = () => {
           </div>
         ))
       )}
+      
+      
+
+      {/* add order item sq */}
+      {showAddModal && (
+  <div className="modal-backdrop">
+    <div
+      className="modal-box"
+      style={{
+        width: "90%",
+        height: "90%",
+        background: "#fff",
+        borderRadius: "0px",
+        padding: "20px",
+        overflowY: "auto",
+        position: "fixed",
+        top: 20,
+        left: 40,
+        zIndex: 1000
+      }}
+    >
+      <EditAddProduct />  {/* ✅ Open OrderPage.jsx full screen */}
+      <div style={{ textAlign: "center", marginTop: "15px" }}>
+        <button onClick={() => setShowAddModal(false)}>Close</button>
+      </div>
+    </div>
+  </div>
+)}
+
+
       {showModal && editOrderData && (
         <div className="modal-backdrop">
           <div
@@ -595,6 +744,24 @@ const ViewOrder = () => {
             <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>
               Sell Order: {editOrderData.customerName}
             </h2>
+            <div style={{ marginBottom: '20px', textAlign: 'center' }}>
+              <label htmlFor="transportName" style={{ marginRight: '10px' }}>
+                Transport Name:
+              </label>
+              <input
+                type="text"
+                id="transportName"
+                value={transportName}
+                onChange={(e) => setTransportName(e.target.value)}
+                style={{
+                  padding: '5px 10px',
+                  width: '200px',
+                  borderRadius: '5px',
+                  border: '1px solid #ccc',
+                }}
+              />
+            </div>
+
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
@@ -716,17 +883,67 @@ const ViewOrder = () => {
                 paddingTop: '10px',
               }}
             >
-            
               <button onClick={saveEdit} style={{ marginRight: '10px' }}>
                 Sell Order
               </button>
+
+              {/* New Save Button */}
+              <button
+                onClick={async () => {
+                  if (!editOrderData) return;
+                  const { user, orderId, orderData, items } = editOrderData;
+
+                  const updatedItems = (items || []).map(item => ({
+                    ...item,
+                    sellQty: item.sellQty ?? "",
+                    less: item.less ?? "",
+                    price: item.price ?? 0,
+                    packet: item.packet ?? ""
+                  }));
+
+                  try {
+                    // ✅ Separate normal vs pending rows
+                    const normalItems = updatedItems.filter(i => !i.isPending);
+                    const pendingItems = updatedItems.filter(i => i.isPending);
+
+                    // ✅ Update Firebase correctly
+                    await update(ref(db, `orders/${user}/${orderId}`), {
+                      ...orderData,
+                      items: normalItems,
+                      pendingOrderRows: pendingItems
+                    });
+
+                    // ✅ Update local state
+                    setOrders(prev =>
+                      prev.map(order =>
+                        order.orderId === orderId && order.user === user
+                          ? { ...order, orderData: { ...orderData, items: normalItems, pendingOrderRows: pendingItems } }
+                          : order
+                      )
+                    );
+
+                    setEditOrderData(prev => ({
+                      ...prev,
+                      orderData: { ...orderData, items: normalItems, pendingOrderRows: pendingItems },
+                      items: updatedItems
+                    }));
+                  } catch (err) {
+                    console.error("Error updating order:", err);
+                  } finally {
+                    setShowModal(false);
+                  }
+                }}
+                style={{ marginRight: "10px" }}
+              >
+                Save
+              </button>
+
               <button onClick={() => setShowModal(false)}>Cancel</button>
             </div>
+
           </div>
         </div>
       )}
-
-
     </div>
   );
 };
