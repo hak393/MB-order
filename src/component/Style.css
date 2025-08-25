@@ -1216,3 +1216,51 @@ input[list] {
 }
 
 
+
+
+
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.modal-box {
+  width: 90%;
+  height: 90%;
+  background: #fff;
+  border-radius: 0px;
+  padding: 20px;
+  overflow-y: auto;
+  position: relative;
+  z-index: 1000;
+}
+
+/* ✅ make modal adaptive for phones */
+@media (max-width: 768px) {
+  .modal-box {
+    width: 95%;
+    height: 95%;
+    padding: 10px;
+    top: auto;
+    left: auto;
+  }
+}
+
+/* ✅ table wrapper for horizontal slider */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table-wrapper table {
+  min-width: 600px;   /* ensures horizontal scroll */
+  border-collapse: collapse;
+}

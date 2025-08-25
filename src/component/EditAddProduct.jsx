@@ -110,14 +110,19 @@ const EditAddProduct = () => {
         if (!d) return setProdSuggestions([]);
         let searchTerm = productName.toLowerCase().replace(/\s+/g, ''); // remove spaces
         let suggestions = Object.values(d)
-          .filter(p => p.name?.toLowerCase().replace(/\s+/g, '').includes(searchTerm))
-          .map(p => ({
-            name: p.name,
-            qty: p.qty || 1,
-            unit: p.unit || 'pcs',
-            price: null,
-            less: null
-          }));
+  .filter(p => p.name?.toLowerCase().replace(/\s+/g, '').includes(searchTerm))
+  .map(p => {
+    // try to match pattern like "something (10 pcs)"
+    const match = p.name.match(/\((\d+)\s*([a-zA-Z]+)\)/);
+    return {
+      name: p.name,
+      qty: match ? parseInt(match[1]) : 1,
+      unit: match ? match[2] : 'pcs',
+      price: null,
+      less: null
+    };
+  });
+
 
         if (custName?.trim()) {
           const sellRes = await fetch(`${URL}/sellOrders.json`), sellData = await sellRes.json();
@@ -199,17 +204,18 @@ const EditAddProduct = () => {
 
 
   const selectProduct = p => {
-    setProductName(`${p.name} (${p.qty})`);
-    setSelectedProdQty(p.qty || 1);
-    setSelectedProdUnit(p.unit || 'pcs');
-    setPrice(p.price || '');
-    setLessVal(p.less === 'NET' ? '' : p.less?.replace('%', '').trim() || '');
-    setLessUnit(p.less === 'NET' ? 'NET' : '%');
-    setProdSuggestions([]);
-    setValidProduct(true);
-    setProductError(false);
-    qtyInputRef.current?.focus();
-  };
+  setProductName(p.name); // already "railway hinges (6 pcs)"
+  setSelectedProdQty(p.qty || 1);
+  setSelectedProdUnit(p.unit || 'pcs');
+  setPrice(p.price || '');
+  setLessVal(p.less === 'NET' ? '' : p.less?.replace('%', '').trim() || '');
+  setLessUnit(p.less === 'NET' ? 'NET' : '%');
+  setProdSuggestions([]);
+  setValidProduct(true);
+  setProductError(false);
+  qtyInputRef.current?.focus();
+};
+
   const handleProductKeyDown = e => {
     if (!prodSuggestions.length) return;
     if (e.key === 'ArrowDown') {
@@ -428,9 +434,18 @@ const EditAddProduct = () => {
     newItemsList = customers[custName]?.items || [],
     combinedItems = [...pendingList, ...newItemsList];
 
+    useEffect(() => {
+  if (matchedOrder) {
+    // Autofill customer and city when an order is matched
+    setCustName(matchedOrder.customerName || '');
+    setCity(matchedOrder.city || '');
+
+    // ✅ Autofocus the product input field
+    productInputRef.current?.focus();
+  }
+}, [matchedOrder]);
+
   return (
-
-
     <div className="orderpage-container">
       <h2 style={{ textAlign: 'center' }}>ADD ORDER</h2>
       <div className="orderpage-form">
@@ -441,7 +456,30 @@ const EditAddProduct = () => {
         <input placeholder="City" value={city} onChange={e => setCity(e.target.value)} />
         <div className="autocomplete-wrapper" style={{ position: 'relative' }}>
           <input placeholder="Product" value={productName} onChange={e => setProductName(e.target.value)} onKeyDown={handleProductKeyDown} onBlur={handleProductBlur} autoComplete="off" className={productError ? 'input-error' : ''} ref={productInputRef} />
-          {prodSuggestions.length > 0 && <ul className="suggestions-dropdown" ref={productListRef} style={{ position: 'absolute', zIndex: 10 }}>{prodSuggestions.map((p, i) => <li key={i} className={i === highlightedProdIndex ? 'highlighted' : ''} onClick={() => selectProduct(p)}>{p.name} ({p.qty}){(p.price || p.less) && <> — {p.price && <>Price {p.price}</>}{p.price && p.less && ' / '}{p.less && <>Less {p.less}</>}</>}</li>)}</ul>}
+          {prodSuggestions.length > 0 && (
+  <ul
+    className="suggestions-dropdown"
+    ref={productListRef}
+    style={{ position: 'absolute', zIndex: 10 }}
+  >
+    {prodSuggestions.map((p, i) => (
+      <li
+        key={i}
+        className={i === highlightedProdIndex ? 'highlighted' : ''}
+        onClick={() => selectProduct(p)}
+      >
+        {p.name}
+        {(p.price || p.less) && (
+          <> — {p.price && <>Price {p.price}</>}
+          {p.price && p.less && ' / '}
+          {p.less && <>Less {p.less}</>}
+          </>
+        )}
+      </li>
+    ))}
+  </ul>
+)}
+
         </div>
         <input placeholder="Qty" value={qty} onChange={e => setQty(e.target.value)} ref={qtyInputRef} />
         <div style={{ display: 'flex', gap: '25px', alignItems: 'center', height: '35px' }}>
@@ -469,11 +507,6 @@ const EditAddProduct = () => {
           <option value="Full Bill">Full Bill</option>
           <option value="half Bill">Half Bill</option>
         </select>
-        <input
-          placeholder="Transport Name"
-          value={transportName}
-          onChange={(e) => setTransportName(e.target.value)}
-        />
 
 
 
@@ -488,7 +521,8 @@ const EditAddProduct = () => {
               <p><strong>Customer:</strong> {matchedOrder.customerName}, <strong>City:</strong> {matchedOrder.city || '-'}</p>
               <p><strong>Date:</strong> {matchedOrder.timestamp}</p>
             </div>
-            <table>
+            <div className="table-wrapper">
+            <table className="order-table">
               <thead>
                 <tr>
                   <th>Sr No</th>
@@ -504,6 +538,20 @@ const EditAddProduct = () => {
               <tbody>
 
                 {/* fetched items with actions */}
+                {/* pendingOrderRows fetched from DB */}
+                {matchedOrder.pendingOrderRows?.map((item, i) => (
+                  <tr key={`pendingRow-${i}`} className="pending-row">
+                    <td>{(matchedOrder.items?.length || 0) + i + 1}</td>
+                    <td>{item.productName}</td>
+                    <td>{`${item.qty} ${item.unit}`}</td>
+                    <td>{item.weight || '-'}</td>
+                    <td>₹{item.price}</td>
+                    <td>{item.less || '-'}</td>
+                    <td>{item.packet ?? '-'}</td>
+                    <td>{'-'}</td>
+                  </tr>
+                ))}
+
                 {matchedOrder.items?.map((item, i) => (
                   <tr key={i}>
                     <td>{i + 1}</td>
@@ -513,12 +561,10 @@ const EditAddProduct = () => {
                     <td>₹{item.price}</td>
                     <td>{item.less || '-'}</td>
                     <td>{item.packet || '-'}</td>
-                    <td>
-                      <button onClick={() => handleEdit('matched', i)}>Edit</button>
-                      <button onClick={() => deleteNewItem(i)}>Delete</button>
-                    </td>
+                    <td>{'-'}</td>
                   </tr>
                 ))}
+
 
                 {/* pending items with actions */}
                 {pendingOrders.map((item, i) => (
@@ -561,7 +607,58 @@ const EditAddProduct = () => {
 
               </tbody>
             </table>
+            </div>
           </div>
+          {newItemsList.length > 0 && (
+            <div style={{ textAlign: "center", marginTop: "20px" }}>
+              <button
+                onClick={async () => {
+                  try {
+                    if (!matchedOrder?.user || !matchedOrder?.orderId) {
+                      alert("No order selected!");
+                      return;
+                    }
+                    
+                    const items = newItemsList.map(
+                      ({ productName, qty, unit, weight, price, less, packQty, packet }) => ({
+                        productName,
+                        qty,
+                        unit,
+                        weight: weight || '',
+                        price: price || '',
+                        less: less || '',
+                        packQty: packQty || '',
+                        packet: packet ?? ''
+                      })
+                    );
+
+                    // ✅ Merge items into existing order
+                    const updatedItems = [...(matchedOrder.items || []), ...items];
+
+                    await fetch(
+                      `${URL}/orders/${matchedOrder.user}/${matchedOrder.orderId}.json`,
+                      {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ items: updatedItems }),
+                      }
+                    );
+
+                    // update UI immediately
+                    setMatchedOrder((prev) => ({ ...prev, items: updatedItems }));
+                    setCustomers((p) => ({ ...p, [custName]: { ...p[custName], items: [] } }));
+
+                    alert("Items added to order!");
+                  } catch (err) {
+                    alert("Error adding items: " + err.message);
+                  }
+                }}
+              >
+                Add Order
+              </button>
+            </div>
+          )}
+
         </div>
       )}
 
@@ -571,3 +668,21 @@ const EditAddProduct = () => {
 };
 
 export default EditAddProduct;
+
+
+
+
+
+
+// const selectProduct = p => {
+//     setProductName(`${p.name} (${p.qty})`);
+//     setSelectedProdQty(p.qty || 1);
+//     setSelectedProdUnit(p.unit || 'pcs');
+//     setPrice(p.price || '');
+//     setLessVal(p.less === 'NET' ? '' : p.less?.replace('%', '').trim() || '');
+//     setLessUnit(p.less === 'NET' ? 'NET' : '%');
+//     setProdSuggestions([]);
+//     setValidProduct(true);
+//     setProductError(false);
+//     qtyInputRef.current?.focus();
+//   };

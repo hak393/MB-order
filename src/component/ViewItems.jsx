@@ -17,34 +17,50 @@ const ViewItems = () => {
 
   // Fetch data from Firebase when option changes
   useEffect(() => {
-    if (selectedOption) {
-      setLoading(true);
-      const path = selectedOption === 'customer' ? 'customers' : 'products';
-      const dataRef = ref(database, path);
-      const unsubscribe = onValue(dataRef, (snapshot) => {
-        const data = snapshot.val() || {};
-        const list = Object.keys(data).map((id) => ({
-          id,
-          ...(selectedOption === 'customer'
-            ? { name: data[id].name || 'Unknown', city: data[id].city || '' }
-            : { name: data[id].name || 'Unknown', qty: data[id].qty || '' }) // 🔹 Changed from price to qty
-        }));
-
+  if (selectedOption) {
+    setLoading(true);
+    const path = selectedOption === 'customer' ? 'customers' : 'products';
+    const dataRef = ref(database, path);
+    const unsubscribe = onValue(dataRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      const list = Object.keys(data).map((id) => {
         if (selectedOption === 'customer') {
-          setCustomers(list);
+          return {
+            id,
+            name: data[id].name || 'Unknown',
+            city: data[id].city || '',
+          };
         } else {
-          setProducts(list);
+          let fullName = data[id].name || 'Unknown';
+          let name = fullName;
+          let qty = '';
+
+          // ✅ extract qty inside brackets e.g. "railway hinges (6 pcs)"
+          const match = fullName.match(/^(.*?)\s*\((.*?)\)$/);
+          if (match) {
+            name = match[1].trim();   // railway hinges
+            qty = match[2].trim();    // 6 pcs
+          }
+
+          return { id, name, qty };
         }
-        setLoading(false);
       });
 
-      return () => unsubscribe();
-    } else {
-      setCustomers([]);
-      setProducts([]);
-      setSearchTerm('');
-    }
-  }, [selectedOption]);
+      if (selectedOption === 'customer') {
+        setCustomers(list);
+      } else {
+        setProducts(list);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  } else {
+    setCustomers([]);
+    setProducts([]);
+    setSearchTerm('');
+  }
+}, [selectedOption]);
 
   // Delete item from Firebase
   const handleDelete = (id) => {
@@ -63,19 +79,24 @@ const ViewItems = () => {
 
   // Save updated data
   const handleSave = (id) => {
-    if (!editField1.trim() || !editField2.trim()) {
-      alert('Fields cannot be empty');
-      return;
-    }
-    const path = selectedOption === 'customer' ? 'customers' : 'products';
-    const updateData =
-      selectedOption === 'customer'
-        ? { name: editField1, city: editField2 }
-        : { name: editField1, qty: editField2 }; // 🔹 Changed from price to qty
+  if (!editField1.trim() || !editField2.trim()) {
+    alert('Fields cannot be empty');
+    return;
+  }
+  const path = selectedOption === 'customer' ? 'customers' : 'products';
+  let updateData;
 
-    update(ref(database, `${path}/${id}`), updateData);
-    setEditId(null);
-  };
+  if (selectedOption === 'customer') {
+    updateData = { name: editField1, city: editField2 };
+  } else {
+    // ✅ recombine name + qty into single string for Firebase
+    updateData = { name: `${editField1} (${editField2})` };
+  }
+
+  update(ref(database, `${path}/${id}`), updateData);
+  setEditId(null);
+};
+
 
   const handleCancel = () => {
     setEditId(null);

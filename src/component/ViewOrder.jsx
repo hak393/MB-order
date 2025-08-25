@@ -13,6 +13,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
+
 const ViewOrder = () => {
   const [orders, setOrders] = useState([]);
   const [userName, setUserName] = useState('');
@@ -20,6 +21,7 @@ const ViewOrder = () => {
   const [editOrderData, setEditOrderData] = useState(null);
   const [transportName, setTransportName] = useState('');
   const [showAddModal, setShowAddModal] = useState(false); // ✅ New state
+  const [activeOrderId, setActiveOrderId] = useState(null); // ✅ add this
 
 
   // Editing row info now includes isPending flag for pending rows
@@ -28,6 +30,7 @@ const ViewOrder = () => {
 
   const navigate = useNavigate();
   const isAuthorizedUser = name => ['huzaifa bhai', 'ammar bhai'].includes(name.toLowerCase());
+  const isAuthorizedAdd = name => ['huzaifa bhai', 'ammar bhai'].includes(name.toLowerCase());
 
   useEffect(() => {
     const storedUser = localStorage.getItem('userName');
@@ -109,13 +112,15 @@ const ViewOrder = () => {
 
     setShowModal(true);
   };
-
-
-
   // Replace saveEdit function with this updated version:
 
   const saveEdit = async () => {
     const { user, customerName, city, items, orderId } = editOrderData;
+
+     if (!transportName.trim()) {
+    return alert("Transport Name is required.");
+  }
+
 
     for (const i of items) {
       const avail = +i.qty || 0;
@@ -142,6 +147,7 @@ const ViewOrder = () => {
       user,
       customerName,
       city,
+      transportName: transportName || '',  // ✅ added transport name
       timestamp: new Date().toISOString(),
       items: processed.map(i => ({
         productName: i.productName,
@@ -151,7 +157,7 @@ const ViewOrder = () => {
         weight: i.weight,
         price: i.price,
         less: i.less,
-        packet: i.packet
+        packet: i.packet || ''   // ✅ already added packet
       }))
     });
 
@@ -287,22 +293,46 @@ const ViewOrder = () => {
     }, { onlyOnce: true });
   };
   const deleteRow = async (user, orderId, idx) => {
-    if (!window.confirm('Are you sure you want to delete this item?')) return;
-    const orderRef = ref(db, `orders/${user}/${orderId}/items`);
-    onValue(orderRef, async snap => {
-      const dbItems = snap.val();
-      if (Array.isArray(dbItems)) {
-        dbItems.splice(idx, 1);
-        if (!dbItems.length) {
-          await remove(ref(db, `orders/${user}/${orderId}`));
+  if (!window.confirm('Are you sure you want to delete this item?')) return;
+
+  const orderRef = ref(db, `orders/${user}/${orderId}`);
+  const itemsRef = ref(db, `orders/${user}/${orderId}/items`);
+
+  onValue(itemsRef, async snap => {
+    let dbItems = snap.val();
+    if (Array.isArray(dbItems)) {
+      dbItems.splice(idx, 1);
+
+      if (!dbItems.length) {
+        // check if pendingOrderRows still exist
+        const pendingSnap = await get(ref(db, `orders/${user}/${orderId}/pendingOrderRows`));
+        const pending = pendingSnap.val();
+
+        if (!pending || !pending.length) {
+          // ✅ remove order only if no items AND no pending rows
+          await remove(orderRef);
           setOrders(p => p.filter(o => !(o.user === user && o.key === `${user}_${orderId}`)));
         } else {
-          await set(orderRef, dbItems);
-          setOrders(p => p.map(o => o.key === `${user}_${orderId}` ? { ...o, orderData: { ...o.orderData, items: dbItems } } : o));
+          // ✅ keep order since pending rows exist
+          await set(itemsRef, []);
+          setOrders(p => p.map(o => 
+            o.key === `${user}_${orderId}` 
+              ? { ...o, orderData: { ...o.orderData, items: [] } } 
+              : o
+          ));
         }
+      } else {
+        await set(itemsRef, dbItems);
+        setOrders(p => p.map(o => 
+          o.key === `${user}_${orderId}` 
+            ? { ...o, orderData: { ...o.orderData, items: dbItems } } 
+            : o
+        ));
       }
-    }, { onlyOnce: true });
-  };
+    }
+  }, { onlyOnce: true });
+};
+
   // --- New: Edit and Delete for pendingOrderRows ---
   const startEditPendingRow = (orderKey, item, rowIndex) => {
     setEditingRow({ orderKey, rowIndex, isPending: true });
@@ -336,29 +366,46 @@ const ViewOrder = () => {
     }, { onlyOnce: true });
   };
   const deletePendingRow = async (user, orderId, idx) => {
-    if (!window.confirm('Are you sure you want to delete this pending item?')) return;
-    const pendingRef = ref(db, `orders/${user}/${orderId}/pendingOrderRows`);
-    onValue(pendingRef, async snap => {
-      const pendingItems = snap.val();
-      if (Array.isArray(pendingItems)) {
-        pendingItems.splice(idx, 1);
-        if (!pendingItems.length) {
-          await set(pendingRef, null);
-          const orderRef = ref(db, `orders/${user}/${orderId}`);
-          onValue(orderRef, snap2 => {
-            const orderData = snap2.val();
-            if ((!orderData.items || orderData.items.length === 0) && (!pendingItems.length)) {
-              remove(orderRef);
-              setOrders(p => p.filter(o => !(o.user === user && o.key === `${user}_${orderId}`)));
-            }
-          }, { onlyOnce: true });
+  if (!window.confirm('Are you sure you want to delete this pending item?')) return;
+
+  const orderRef = ref(db, `orders/${user}/${orderId}`);
+  const pendingRef = ref(db, `orders/${user}/${orderId}/pendingOrderRows`);
+
+  onValue(pendingRef, async snap => {
+    let pendingItems = snap.val();
+    if (Array.isArray(pendingItems)) {
+      pendingItems.splice(idx, 1);
+
+      if (!pendingItems.length) {
+        // check if normal items still exist
+        const itemsSnap = await get(ref(db, `orders/${user}/${orderId}/items`));
+        const items = itemsSnap.val();
+
+        if (!items || !items.length) {
+          // ✅ remove order only if no items AND no pending rows
+          await remove(orderRef);
+          setOrders(p => p.filter(o => !(o.user === user && o.key === `${user}_${orderId}`)));
         } else {
-          await set(pendingRef, pendingItems);
-          setOrders(p => p.map(o => o.key === `${user}_${orderId}` ? { ...o, orderData: { ...o.orderData, pendingOrderRows: pendingItems } } : o));
+          // ✅ keep order since items exist
+          await set(pendingRef, []);
+          setOrders(p => p.map(o => 
+            o.key === `${user}_${orderId}` 
+              ? { ...o, orderData: { ...o.orderData, pendingOrderRows: [] } } 
+              : o
+          ));
         }
+      } else {
+        await set(pendingRef, pendingItems);
+        setOrders(p => p.map(o => 
+          o.key === `${user}_${orderId}` 
+            ? { ...o, orderData: { ...o.orderData, pendingOrderRows: pendingItems } } 
+            : o
+        ));
       }
-    }, { onlyOnce: true });
-  };
+    }
+  }, { onlyOnce: true });
+};
+
   const previewAndPrint = ({ user, customerName, orderData, orderId }) => {
     const w = window.open('', '_blank', 'width=800,height=600');
 
@@ -471,22 +518,35 @@ const ViewOrder = () => {
 
 
   // add order data
- // --- Function inside ViewOrder ---
-const handleAddOrder = async (orderId) => {
-  try {
-    // Save orderId into addOrder
-    await set(ref(db, `addOrder/${orderId}`), true);
+  // --- Function inside ViewOrder ---
+  const handleAddOrder = async (orderId) => {
+    try {
+      // Save orderId into addOrder
+      await set(ref(db, `addOrder/${orderId}`), true);
 
-    // Open modal with OrderPage
-    setShowAddModal(true);
-  } catch (err) {
-    console.error("Error adding order:", err);
-  }
-};
+      // Store the active orderId so we can delete it later on close
+      setActiveOrderId(orderId);
+
+      // Open modal with OrderPage
+      setShowAddModal(true);
+    } catch (err) {
+      console.error("Error adding order:", err);
+    }
+  };
+  const handleCloseModal = async () => {
+    try {
+      if (activeOrderId) {
+        await remove(ref(db, `addOrder/${activeOrderId}`));
+        setActiveOrderId(null); // clear state
+      }
+      setShowAddModal(false);
+    } catch (err) {
+      console.error("Error closing modal:", err);
+    }
+  };
 
 
 
-  
   return (
     <div className="orderpage-container">
       <h2 style={{ textAlign: 'center' }}>VIEW ORDERS</h2>
@@ -503,12 +563,15 @@ const handleAddOrder = async (orderId) => {
                 <strong>City:</strong> {orderData.city} <br />
                 <strong>Placed On:</strong> {orderData.timestamp}
               </div>
-              {isAuthorizedUser(userName) && (
+              {(isAuthorizedAdd(userName) || userName === user) &&(
                 <div className="order-action">
                   {/* ✅ Change Add button to open modal */}
                   <button onClick={() => handleAddOrder(orderId)}>Add</button>
-
-
+                </div>
+              )}
+              {isAuthorizedUser(userName) && (
+                <div className="order-action">
+                  {/* ✅ Change Add button to open modal */}
                   <button onClick={() => handleSellOrder(user, customerName, orderData, orderId)}>Sell</button>
                   <button style={{ marginTop: '10px' }} onClick={() => previewAndPrint({ user, customerName, orderData })}>Print</button>
                 </div>
@@ -697,34 +760,35 @@ const handleAddOrder = async (orderId) => {
           </div>
         ))
       )}
-      
-      
+
+
 
       {/* add order item sq */}
       {showAddModal && (
-  <div className="modal-backdrop">
-    <div
-      className="modal-box"
-      style={{
-        width: "90%",
-        height: "90%",
-        background: "#fff",
-        borderRadius: "0px",
-        padding: "20px",
-        overflowY: "auto",
-        position: "fixed",
-        top: 20,
-        left: 40,
-        zIndex: 1000
-      }}
-    >
-      <EditAddProduct />  {/* ✅ Open OrderPage.jsx full screen */}
-      <div style={{ textAlign: "center", marginTop: "15px" }}>
-        <button onClick={() => setShowAddModal(false)}>Close</button>
-      </div>
-    </div>
-  </div>
-)}
+        <div className="modal-backdrop">
+          <div
+            className="modal-box"
+            style={{
+              width: "90%",
+              height: "90%",
+              background: "#fff",
+              borderRadius: "0px",
+              padding: "20px",
+              overflowY: "auto",
+              position: "fixed",
+              top: 20,
+              left: 40,
+              zIndex: 1000
+            }}
+          >
+            <EditAddProduct />  {/* ✅ Open OrderPage.jsx full screen */}
+            <div style={{ textAlign: "center", marginTop: "15px" }}>
+              <button onClick={handleCloseModal}>Close</button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
 
       {showModal && editOrderData && (

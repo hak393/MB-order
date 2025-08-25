@@ -1,12 +1,42 @@
-// src/component/SellOrder.jsx
 import React, { useEffect, useState, useRef } from 'react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getDatabase, ref, onValue, update } from 'firebase/database';
+import { getDatabase, ref, onValue, update, get } from 'firebase/database'; // ⬅ added get
 import './Style.css';
 
 const firebaseConfig = { databaseURL: 'https://mb-order-3764e-default-rtdb.firebaseio.com/' };
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getDatabase(app);
+
+// 🔥 Put helper function here (after db is defined)
+const updateProductNameEverywhere = async (productId, newName) => {
+  const productsRef = ref(db, `products/${productId}`);
+
+  // 1. Get old name from products
+  const snapshot = await get(productsRef);
+  if (!snapshot.exists()) return;
+  const oldName = snapshot.val().name;
+
+  // 2. Update product name
+  await update(productsRef, { name: newName });
+
+  // 3. Update in all sellOrders
+  const sellOrdersRef = ref(db, 'sellOrders');
+  const sellOrdersSnap = await get(sellOrdersRef);
+  if (!sellOrdersSnap.exists()) return;
+
+  const orders = sellOrdersSnap.val();
+  Object.keys(orders).forEach(orderId => {
+    const order = orders[orderId];
+    if (order.items) {
+      const updatedItems = order.items.map(item =>
+        item.productName === oldName
+          ? { ...item, productName: newName }
+          : item
+      );
+      update(ref(db, `sellOrders/${orderId}`), { items: updatedItems });
+    }
+  });
+};
 
 const SellOrder = () => {
   const [sellOrders, setSellOrders] = useState([]);
@@ -27,7 +57,7 @@ const SellOrder = () => {
       formatted.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
       // Assign challan number sequentially per month
-      const monthMap = {}; // "YYYY-MM" => count
+      const monthMap = {};
       const withChallan = formatted.map((order) => {
         const date = new Date(order.timestamp);
         const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
@@ -90,7 +120,6 @@ const SellOrder = () => {
     setEditItems([]);
   };
 
-  // Filter orders by selected date
   const filteredOrders = sellOrders.filter(order => {
     const orderDate = new Date(order.timestamp).toISOString().slice(0, 10);
     return orderDate === selectedDate;
@@ -100,17 +129,14 @@ const SellOrder = () => {
     <div className="orderpage-container">
       <h2 style={{ textAlign: 'center' }}>SELL ORDERS</h2>
 
-      {/* Date picker */}
-      {/* Date picker */}
-<div className="date-picker-container">
-  <label>Select Date:</label>
-  <input
-    type="date"
-    value={selectedDate}
-    onChange={(e) => setSelectedDate(e.target.value)}
-  />
-</div>
-
+      <div className="date-picker-container">
+        <label>Select Date:</label>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+        />
+      </div>
 
       {filteredOrders.length === 0 ? (
         <p style={{ textAlign: 'center' }}>No sell orders found for selected date.</p>
@@ -143,6 +169,7 @@ const SellOrder = () => {
                   <strong>User:</strong> {order.user} <br />
                   <strong>Customer:</strong> {order.customerName} <br />
                   <strong>City:</strong> {order.city} <br />
+                  <strong>Transport:</strong> {order.transportName || '-'} <br />
                   <strong>Sold On:</strong> {new Date(order.timestamp).toLocaleString()}
                 </div>
               </div>
@@ -150,22 +177,23 @@ const SellOrder = () => {
                 <thead>
                   <tr>
                     <th>Product</th>
-                    <th>Original Qty</th>
+                    {/* ❌ Removed Original Qty from print */}
                     <th>Sold Qty</th>
                     <th>Weight</th>
                     <th>Less</th>
                     <th>Price</th>
+                    <th>Packet</th>
                   </tr>
                 </thead>
                 <tbody>
                   {order.items.map((item, i) => (
                     <tr key={i}>
                       <td>{item.productName}</td>
-                      <td>{item.originalQty} {item.unit}</td>
                       <td>{item.soldQty || item.originalQty} {item.unit}</td>
                       <td>{item.weight || '-'}</td>
                       <td>{item.less || '-'}</td>
                       <td>₹{item.price}</td>
+                      <td>{item.packet || '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -197,7 +225,7 @@ const SellOrder = () => {
             overflowX: 'auto'
           }}>
             <h2>Edit Items for {editingOrder.customerName}</h2>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '600px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
               <thead>
                 <tr>
                   <th>Product</th>
@@ -206,6 +234,7 @@ const SellOrder = () => {
                   <th>Weight</th>
                   <th>Less</th>
                   <th>Price</th>
+                  <th>Packet</th>
                 </tr>
               </thead>
               <tbody>
@@ -217,6 +246,7 @@ const SellOrder = () => {
                     <td><input value={item.weight || ''} onChange={(e) => handleItemChange(idx, 'weight', e.target.value)} /></td>
                     <td><input value={item.less || ''} onChange={(e) => handleItemChange(idx, 'less', e.target.value)} /></td>
                     <td><input type="number" value={item.price} onChange={(e) => handleItemChange(idx, 'price', e.target.value)} /></td>
+                    <td><input value={item.packet || ''} onChange={(e) => handleItemChange(idx, 'packet', e.target.value)} /></td>
                   </tr>
                 ))}
               </tbody>

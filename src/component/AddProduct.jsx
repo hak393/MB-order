@@ -29,15 +29,16 @@ const AddProduct = () => {
 
   // Fetch existing products
   useEffect(() => {
-    const productsRef = ref(database, 'products');
-    return onValue(productsRef, snapshot => {
-      const data = snapshot.val();
-      const products = data
-        ? Object.values(data).map(p => ({ name: p.name, qty: p.qty }))
-        : [];
-      setProductsList(products);
-    });
-  }, []);
+  const productsRef = ref(database, 'products');
+  return onValue(productsRef, snapshot => {
+    const data = snapshot.val();
+    const products = data
+      ? Object.values(data).map(p => ({ name: p.name }))
+      : [];
+    setProductsList(products);
+  });
+}, []);
+
 
   // Normalize string: remove spaces & lowercase
   const normalize = str => str.replace(/\s+/g, '').toLowerCase();
@@ -60,27 +61,30 @@ const AddProduct = () => {
   };
 
   // Add product
-  const handleAddProduct = () => {
-    if (!productName.trim() || !productQty.trim()) {
-      setPopup({ show: true, message: 'Please enter product name and quantity!' });
-      return;
-    }
-    if (isNaN(productQty) || Number(productQty) <= 0) {
-      setPopup({ show: true, message: 'Please enter a valid quantity!' });
-      return;
-    }
+  // Add product
+const handleAddProduct = () => {
+  if (!productName.trim() || !productQty.trim()) {
+    setPopup({ show: true, message: 'Please enter product name and quantity!' });
+    return;
+  }
+  if (isNaN(productQty) || Number(productQty) <= 0) {
+    setPopup({ show: true, message: 'Please enter a valid quantity!' });
+    return;
+  }
 
-    const qtyWithUnit = `${productQty} ${unit}`;
+  // Combine everything into one line: "ProductName (Qty Unit)"
+  const finalName = `${productName.trim()} (${productQty} ${unit})`;
 
-    push(ref(database, 'products'), {
-      name: productName.trim(),
-      qty: qtyWithUnit,
-      unit: unit,
-    });
+  push(ref(database, 'products'), {
+    name: finalName
+  });
 
-    setPopup({ show: true, message: `Product "${productName}" with quantity ${qtyWithUnit} added! ✅` });
-    setProductName(''); setProductQty(''); setUnit('pcs');
-  };
+  setPopup({ show: true, message: `Product "${finalName}" added! ✅` });
+  setProductName('');
+  setProductQty('');
+  setUnit('pcs');
+};
+
 
   // Filter products for display ignoring spaces
   const filteredProducts = productsList.filter(p =>
@@ -88,10 +92,11 @@ const AddProduct = () => {
   );
 
   // Check if product with same name and qty exists ignoring spaces
-  const qtyWithUnit = `${productQty} ${unit}`;
-  const isDuplicate = productsList.some(
-    p => normalize(p.name) === normalize(productName.trim()) && p.qty === qtyWithUnit
-  );
+  const finalName = `${productName.trim()} (${productQty} ${unit})`;
+const isDuplicate = productsList.some(
+  p => normalize(p.name) === normalize(finalName)
+);
+
 
   return (
     <div className="add-product">
