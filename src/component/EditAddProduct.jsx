@@ -30,6 +30,7 @@ const EditAddProduct = () => {
   const [justSelectedCustomer, setJustSelectedCustomer] = useState(false),
     [highlightedCustIndex, setHighlightedCustIndex] = useState(-1),
     [highlightedProdIndex, setHighlightedProdIndex] = useState(-1);
+    const [justSelectedProduct, setJustSelectedProduct] = useState(false);
 
 
   const refDebCust = useRef(null),
@@ -101,27 +102,33 @@ const EditAddProduct = () => {
   }, [custName, justSelectedCustomer]);
 
   useEffect(() => {
-    if (refDebProd.current) clearTimeout(refDebProd.current);
-    if (!productName.trim()) return setProdSuggestions([]);
-    setValidProduct(false);
-    refDebProd.current = setTimeout(async () => {
-      try {
-        const r = await fetch(`${URL}/products.json`), d = await r.json();
-        if (!d) return setProdSuggestions([]);
-        let searchTerm = productName.toLowerCase().replace(/\s+/g, ''); // remove spaces
-        let suggestions = Object.values(d)
-  .filter(p => p.name?.toLowerCase().replace(/\s+/g, '').includes(searchTerm))
-  .map(p => {
-    // try to match pattern like "something (10 pcs)"
-    const match = p.name.match(/\((\d+)\s*([a-zA-Z]+)\)/);
-    return {
-      name: p.name,
-      qty: match ? parseInt(match[1]) : 1,
-      unit: match ? match[2] : 'pcs',
-      price: null,
-      less: null
-    };
-  });
+  if (refDebProd.current) clearTimeout(refDebProd.current);
+
+  // 🚫 stop if just selected OR empty field
+  if (justSelectedProduct || !productName.trim()) {
+    return setProdSuggestions([]);
+  }
+
+  setValidProduct(false);
+  refDebProd.current = setTimeout(async () => {
+    try {
+      const r = await fetch(`${URL}/products.json`);
+      const d = await r.json();
+      if (!d) return setProdSuggestions([]);
+
+      let searchTerm = productName.toLowerCase().replace(/\s+/g, '');
+      let suggestions = Object.values(d)
+        .filter(p => p.name?.toLowerCase().replace(/\s+/g, '').includes(searchTerm))
+        .map(p => {
+          const match = p.name.match(/\((\d+)\s*([a-zA-Z]+)\)/);
+          return {
+            name: p.name,
+            qty: match ? parseInt(match[1]) : 1,
+            unit: match ? match[2] : 'pcs',
+            price: null,
+            less: null
+          };
+        });
 
 
         if (custName?.trim()) {
@@ -144,11 +151,13 @@ const EditAddProduct = () => {
           }
         }
         setProdSuggestions(suggestions.slice(0, 10));
-        setHighlightedProdIndex(-1);
-      } catch (e) { console.error(e); setProdSuggestions([]); }
-    }, 200);
-  }, [productName, custName]);
-
+      setHighlightedProdIndex(-1);
+    } catch (e) {
+      console.error(e);
+      setProdSuggestions([]);
+    }
+  }, 200);
+}, [productName, custName, justSelectedProduct]);
   // taha taha taha taha
   const checkOrderId = async (id) => {
     try {
@@ -204,7 +213,7 @@ const EditAddProduct = () => {
 
 
   const selectProduct = p => {
-  setProductName(p.name); // already "railway hinges (6 pcs)"
+  setProductName(p.name);
   setSelectedProdQty(p.qty || 1);
   setSelectedProdUnit(p.unit || 'pcs');
   setPrice(p.price || '');
@@ -213,8 +222,11 @@ const EditAddProduct = () => {
   setProdSuggestions([]);
   setValidProduct(true);
   setProductError(false);
+
+  setJustSelectedProduct(true);   // ✅ lock suggestions until cleared
   qtyInputRef.current?.focus();
 };
+
 
   const handleProductKeyDown = e => {
     if (!prodSuggestions.length) return;
@@ -668,21 +680,3 @@ const EditAddProduct = () => {
 };
 
 export default EditAddProduct;
-
-
-
-
-
-
-// const selectProduct = p => {
-//     setProductName(`${p.name} (${p.qty})`);
-//     setSelectedProdQty(p.qty || 1);
-//     setSelectedProdUnit(p.unit || 'pcs');
-//     setPrice(p.price || '');
-//     setLessVal(p.less === 'NET' ? '' : p.less?.replace('%', '').trim() || '');
-//     setLessUnit(p.less === 'NET' ? 'NET' : '%');
-//     setProdSuggestions([]);
-//     setValidProduct(true);
-//     setProductError(false);
-//     qtyInputRef.current?.focus();
-//   };

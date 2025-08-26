@@ -13,42 +13,52 @@ const Header = ({ onLogout }) => {
   const navigate = useNavigate();
   const [userName, setUserName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  
 
   useEffect(() => {
-    const storedUser = sessionStorage.getItem('currentUser');
+  const storedUser = sessionStorage.getItem('currentUser');
+
+  // 🚨 Handle Unknown user immediately
+  if (!storedUser || storedUser.toLowerCase() === 'unknown') {
+    alert('You are not logged in. Please login first.');
+    onLogout();
+    sessionStorage.removeItem('currentUser');
+    navigate('/');
+    return; // stop further checks
+  }
+
+  setUserName(storedUser);
+
+  // Skip firebase check for special users
+  if (specialUsers.includes(storedUser.toLowerCase())) {
+    return;
+  }
+
+  const usersRef = ref(database, 'users');
+  const unsubscribe = onValue(usersRef, (snapshot) => {
+    const usersData = snapshot.val() || {};
+    const usersArray = Object.values(usersData);
+
     if (storedUser) {
-      setUserName(storedUser);
-    }
+      const lowerStoredUser = storedUser.toLowerCase();
+      const userExists = usersArray.some(u =>
+        u.toLowerCase().startsWith(lowerStoredUser + ':')
+      );
 
-    // Skip firebase check for special users
-    if (storedUser && specialUsers.includes(storedUser.toLowerCase())) {
-      return;
-    }
-
-    const usersRef = ref(database, 'users');
-    const unsubscribe = onValue(usersRef, (snapshot) => {
-      const usersData = snapshot.val() || {};
-      const usersArray = Object.values(usersData); // array of "username:password"
-
-      if (storedUser) {
-        const lowerStoredUser = storedUser.toLowerCase();
-        const userExists = usersArray.some(u =>
-          u.toLowerCase().startsWith(lowerStoredUser + ':')
-        );
-
-        if (!userExists) {
-          alert('Your account has been deleted or you are not authorized. Logging out.');
-          onLogout();
-          sessionStorage.removeItem('currentUser');
-          navigate('/');
-        }
+      if (!userExists) {
+        alert('Your account has been deleted or you are not authorized. Logging out.');
+        onLogout();
+        sessionStorage.removeItem('currentUser');
+        navigate('/');
       }
-    });
+    }
+  });
 
-    return () => {
-      unsubscribe();
-    };
-  }, [navigate, onLogout]);
+  return () => {
+    unsubscribe();
+  };
+}, [navigate, onLogout]);
+
 
   const isAllowedUser = specialUsers.includes(userName.toLowerCase());
 
@@ -78,12 +88,12 @@ const Header = ({ onLogout }) => {
           <button onClick={() => handleNavigate('/order')} className="view-orders-btn">Order Page</button>
           <button onClick={() => handleNavigate('/view-orders')} className="view-orders-btn">View Orders</button>
           <button onClick={() => handleNavigate('/pending-orders')} className="view-orders-btn">Pending Orders</button>
-          <button onClick={() => handleNavigate('/view-items')} className="view-orders-btn">View Items</button>
           {isAllowedUser && (
             <>
               <button onClick={() => handleNavigate('/user-handle')} className="view-orders-btn">User Handle</button>
               <button onClick={() => handleNavigate('/add-product')} className="view-orders-btn">Add Product</button>
               <button onClick={() => handleNavigate('/sell-order')} className="view-orders-btn">Sell Order</button>
+              <button onClick={() => handleNavigate('/view-items')} className="view-orders-btn">View Items</button>
             </>
           )}
 

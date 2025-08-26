@@ -1,7 +1,7 @@
 // src/component/ViewItems.jsx
 import React, { useEffect, useState } from 'react';
 import { database } from '../firebase/firebase';
-import { ref, onValue, remove, update } from 'firebase/database';
+import { ref, onValue, remove, update , get , child} from 'firebase/database';
 import './Style.css';
 
 const ViewItems = () => {
@@ -78,7 +78,9 @@ const ViewItems = () => {
   };
 
   // Save updated data
-  const handleSave = (id) => {
+  // Save updated data
+// Save updated data
+const handleSave = async (id) => {
   if (!editField1.trim() || !editField2.trim()) {
     alert('Fields cannot be empty');
     return;
@@ -87,13 +89,68 @@ const ViewItems = () => {
   let updateData;
 
   if (selectedOption === 'customer') {
+    // ✅ Get old values before updating
+    const customerSnap = await get(ref(database, `${path}/${id}`));
+    if (!customerSnap.exists()) return;
+    const oldData = customerSnap.val();
+    const oldName = oldData.name;
+    const oldCity = oldData.city;
+
+    // 1️⃣ Update customer in `customers`
     updateData = { name: editField1, city: editField2 };
+    await update(ref(database, `${path}/${id}`), updateData);
+
+    // 2️⃣ Search all sellOrders & update customerName/city if matches
+    const sellOrdersSnap = await get(ref(database, 'sellOrders'));
+    if (sellOrdersSnap.exists()) {
+      const updates = {};
+      const sellOrders = sellOrdersSnap.val();
+
+      Object.keys(sellOrders).forEach((orderId) => {
+        const order = sellOrders[orderId];
+        if (order.customerName === oldName || order.city === oldCity) {
+          updates[`sellOrders/${orderId}/customerName`] = editField1;
+          updates[`sellOrders/${orderId}/city`] = editField2;
+        }
+      });
+
+      if (Object.keys(updates).length > 0) {
+        await update(ref(database), updates);
+      }
+    }
   } else {
     // ✅ recombine name + qty into single string for Firebase
-    updateData = { name: `${editField1} (${editField2})` };
+    const newName = `${editField1} (${editField2})`;
+
+    // 1️⃣ Get old name first
+    const productSnap = await get(ref(database, `${path}/${id}`));
+    if (!productSnap.exists()) return;
+    const oldName = productSnap.val().name;
+
+    // 2️⃣ Update product in `products`
+    await update(ref(database, `${path}/${id}`), { name: newName });
+
+    // 3️⃣ Search all sellOrders & update productName if matches oldName
+    const sellOrdersSnap = await get(ref(database, 'sellOrders'));
+    if (sellOrdersSnap.exists()) {
+      const updates = {};
+      const sellOrders = sellOrdersSnap.val();
+
+      Object.keys(sellOrders).forEach((orderId) => {
+        const items = sellOrders[orderId].items || {};
+        Object.keys(items).forEach((itemKey) => {
+          if (items[itemKey].productName === oldName) {
+            updates[`sellOrders/${orderId}/items/${itemKey}/productName`] = newName;
+          }
+        });
+      });
+
+      if (Object.keys(updates).length > 0) {
+        await update(ref(database), updates);
+      }
+    }
   }
 
-  update(ref(database, `${path}/${id}`), updateData);
   setEditId(null);
 };
 

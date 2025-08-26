@@ -127,11 +127,11 @@ const OrderPage = () => {
   }, [productName, custName , justSelectedProduct]);
 
   useEffect(() => {
-  if (justSelectedProduct) {
-    const t = setTimeout(() => setJustSelectedProduct(false), 0);
-    return () => clearTimeout(t);
+  if (!productName.trim()) {
+    setJustSelectedProduct(false);  // reset only when product field is empty
   }
-}, [justSelectedProduct]);
+}, [productName]);
+
 
 
   const selectCustomer = (n, c) => {
@@ -214,15 +214,15 @@ const OrderPage = () => {
       : lessUnit; // for NET, pair, Full Bill, half Bill
 
     const newItem = {
-      productName,
-      unit: selectedProdUnit,
-      less,
-      qty: finalQty,
-      weight,
-      price,
-      packQty: selectedProdQty,
-      packet: qty // <-- Raw Qty value
-    };
+  productName,
+  unit: selectedProdUnit,
+  less,
+  qty: finalQty,
+  weight,
+  price,
+  packQty: selectedProdQty,
+  packet: unit === 'pk' ? qty : '' // ✅ only keep packet if PK, else empty
+};
 
 
     if (editing) {
