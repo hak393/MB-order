@@ -267,15 +267,16 @@ const EditAddProduct = () => {
       : lessUnit; // for NET, pair, Full Bill, half Bill
 
     const newItem = {
-      productName,
-      unit: selectedProdUnit,
-      less,
-      qty: finalQty,
-      weight,
-      price,
-      packQty: selectedProdQty,
-      packet: qty // <-- Raw Qty value
-    };
+  productName,
+  unit: selectedProdUnit,
+  less,
+  qty: finalQty,
+  weight,
+  price,
+  packQty: selectedProdQty,
+  packet: unit === 'pk' ? qty : '' // ✅ only keep packet if PK, else empty
+};
+
 
 
     if (editing) {
@@ -463,7 +464,6 @@ const EditAddProduct = () => {
       <div className="orderpage-form">
         <div className="autocomplete-wrapper">
           <input placeholder="Customer Name" value={custName} onChange={handleCustomerChange} onKeyDown={handleCustomerKeyDown} onBlur={handleCustomerBlur} className={customerError ? 'input-error' : ''} ref={customerInputRef} />
-          {suggestions.length > 0 && <ul className="suggestions-dropdown" ref={customerListRef}>{suggestions.map((s, i) => <li key={i} className={i === highlightedCustIndex ? 'highlighted' : ''} onClick={() => selectCustomer(s.name, s.city)}>{s.name} — {s.city}</li>)}</ul>}
         </div>
         <input placeholder="City" value={city} onChange={e => setCity(e.target.value)} />
         <div className="autocomplete-wrapper" style={{ position: 'relative' }}>
