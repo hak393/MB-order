@@ -30,7 +30,8 @@ const EditAddProduct = () => {
   const [justSelectedCustomer, setJustSelectedCustomer] = useState(false),
     [highlightedCustIndex, setHighlightedCustIndex] = useState(-1),
     [highlightedProdIndex, setHighlightedProdIndex] = useState(-1);
-    const [justSelectedProduct, setJustSelectedProduct] = useState(false);
+  const [justSelectedProduct, setJustSelectedProduct] = useState(false);
+  const [loading, setLoading] = useState(false);
 
 
   const refDebCust = useRef(null),
@@ -102,33 +103,33 @@ const EditAddProduct = () => {
   }, [custName, justSelectedCustomer]);
 
   useEffect(() => {
-  if (refDebProd.current) clearTimeout(refDebProd.current);
+    if (refDebProd.current) clearTimeout(refDebProd.current);
 
-  // 🚫 stop if just selected OR empty field
-  if (justSelectedProduct || !productName.trim()) {
-    return setProdSuggestions([]);
-  }
+    // 🚫 stop if just selected OR empty field
+    if (justSelectedProduct || !productName.trim()) {
+      return setProdSuggestions([]);
+    }
 
-  setValidProduct(false);
-  refDebProd.current = setTimeout(async () => {
-    try {
-      const r = await fetch(`${URL}/products.json`);
-      const d = await r.json();
-      if (!d) return setProdSuggestions([]);
+    setValidProduct(false);
+    refDebProd.current = setTimeout(async () => {
+      try {
+        const r = await fetch(`${URL}/products.json`);
+        const d = await r.json();
+        if (!d) return setProdSuggestions([]);
 
-      let searchTerm = productName.toLowerCase().replace(/\s+/g, '');
-      let suggestions = Object.values(d)
-        .filter(p => p.name?.toLowerCase().replace(/\s+/g, '').includes(searchTerm))
-        .map(p => {
-          const match = p.name.match(/\((\d+)\s*([a-zA-Z]+)\)/);
-          return {
-            name: p.name,
-            qty: match ? parseInt(match[1]) : 1,
-            unit: match ? match[2] : 'pcs',
-            price: null,
-            less: null
-          };
-        });
+        let searchTerm = productName.toLowerCase().replace(/\s+/g, '');
+        let suggestions = Object.values(d)
+          .filter(p => p.name?.toLowerCase().replace(/\s+/g, '').includes(searchTerm))
+          .map(p => {
+            const match = p.name.match(/\((\d+)\s*([a-zA-Z]+)\)/);
+            return {
+              name: p.name,
+              qty: match ? parseInt(match[1]) : 1,
+              unit: match ? match[2] : 'pcs',
+              price: null,
+              less: null
+            };
+          });
 
 
         if (custName?.trim()) {
@@ -151,13 +152,13 @@ const EditAddProduct = () => {
           }
         }
         setProdSuggestions(suggestions.slice(0, 10));
-      setHighlightedProdIndex(-1);
-    } catch (e) {
-      console.error(e);
-      setProdSuggestions([]);
-    }
-  }, 200);
-}, [productName, custName, justSelectedProduct]);
+        setHighlightedProdIndex(-1);
+      } catch (e) {
+        console.error(e);
+        setProdSuggestions([]);
+      }
+    }, 200);
+  }, [productName, custName, justSelectedProduct]);
   // taha taha taha taha
   const checkOrderId = async (id) => {
     try {
@@ -213,19 +214,19 @@ const EditAddProduct = () => {
 
 
   const selectProduct = p => {
-  setProductName(p.name);
-  setSelectedProdQty(p.qty || 1);
-  setSelectedProdUnit(p.unit || 'pcs');
-  setPrice(p.price || '');
-  setLessVal(p.less === 'NET' ? '' : p.less?.replace('%', '').trim() || '');
-  setLessUnit(p.less === 'NET' ? 'NET' : '%');
-  setProdSuggestions([]);
-  setValidProduct(true);
-  setProductError(false);
+    setProductName(p.name);
+    setSelectedProdQty(p.qty || 1);
+    setSelectedProdUnit(p.unit || 'pcs');
+    setPrice(p.price || '');
+    setLessVal(p.less === 'NET' ? '' : p.less?.replace('%', '').trim() || '');
+    setLessUnit(p.less === 'NET' ? 'NET' : '%');
+    setProdSuggestions([]);
+    setValidProduct(true);
+    setProductError(false);
 
-  setJustSelectedProduct(true);   // ✅ lock suggestions until cleared
-  qtyInputRef.current?.focus();
-};
+    setJustSelectedProduct(true);   // ✅ lock suggestions until cleared
+    qtyInputRef.current?.focus();
+  };
 
 
   const handleProductKeyDown = e => {
@@ -267,15 +268,15 @@ const EditAddProduct = () => {
       : lessUnit; // for NET, pair, Full Bill, half Bill
 
     const newItem = {
-  productName,
-  unit: selectedProdUnit,
-  less,
-  qty: finalQty,
-  weight,
-  price,
-  packQty: selectedProdQty,
-  packet: unit === 'pk' ? qty : '' // ✅ only keep packet if PK, else empty
-};
+      productName,
+      unit: selectedProdUnit,
+      less,
+      qty: finalQty,
+      weight,
+      price,
+      packQty: selectedProdQty,
+      packet: unit === 'pk' ? qty : '' // ✅ only keep packet if PK, else empty
+    };
 
 
 
@@ -447,16 +448,16 @@ const EditAddProduct = () => {
     newItemsList = customers[custName]?.items || [],
     combinedItems = [...pendingList, ...newItemsList];
 
-    useEffect(() => {
-  if (matchedOrder) {
-    // Autofill customer and city when an order is matched
-    setCustName(matchedOrder.customerName || '');
-    setCity(matchedOrder.city || '');
+  useEffect(() => {
+    if (matchedOrder) {
+      // Autofill customer and city when an order is matched
+      setCustName(matchedOrder.customerName || '');
+      setCity(matchedOrder.city || '');
 
-    // ✅ Autofocus the product input field
-    productInputRef.current?.focus();
-  }
-}, [matchedOrder]);
+      // ✅ Autofocus the product input field
+      productInputRef.current?.focus();
+    }
+  }, [matchedOrder]);
 
   return (
     <div className="orderpage-container">
@@ -469,28 +470,28 @@ const EditAddProduct = () => {
         <div className="autocomplete-wrapper" style={{ position: 'relative' }}>
           <input placeholder="Product" value={productName} onChange={e => setProductName(e.target.value)} onKeyDown={handleProductKeyDown} onBlur={handleProductBlur} autoComplete="off" className={productError ? 'input-error' : ''} ref={productInputRef} />
           {prodSuggestions.length > 0 && (
-  <ul
-    className="suggestions-dropdown"
-    ref={productListRef}
-    style={{ position: 'absolute', zIndex: 10 }}
-  >
-    {prodSuggestions.map((p, i) => (
-      <li
-        key={i}
-        className={i === highlightedProdIndex ? 'highlighted' : ''}
-        onClick={() => selectProduct(p)}
-      >
-        {p.name}
-        {(p.price || p.less) && (
-          <> — {p.price && <>Price {p.price}</>}
-          {p.price && p.less && ' / '}
-          {p.less && <>Less {p.less}</>}
-          </>
-        )}
-      </li>
-    ))}
-  </ul>
-)}
+            <ul
+              className="suggestions-dropdown"
+              ref={productListRef}
+              style={{ position: 'absolute', zIndex: 10 }}
+            >
+              {prodSuggestions.map((p, i) => (
+                <li
+                  key={i}
+                  className={i === highlightedProdIndex ? 'highlighted' : ''}
+                  onClick={() => selectProduct(p)}
+                >
+                  {p.name}
+                  {(p.price || p.less) && (
+                    <> — {p.price && <>Price {p.price}</>}
+                      {p.price && p.less && ' / '}
+                      {p.less && <>Less {p.less}</>}
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
 
         </div>
         <input placeholder="Qty" value={qty} onChange={e => setQty(e.target.value)} ref={qtyInputRef} />
@@ -534,103 +535,104 @@ const EditAddProduct = () => {
               <p><strong>Date:</strong> {matchedOrder.timestamp}</p>
             </div>
             <div className="table-wrapper">
-            <table className="order-table">
-              <thead>
-                <tr>
-                  <th>Sr No</th>
-                  <th>Product</th>
-                  <th>Qty</th>
-                  <th>Weight</th>
-                  <th>Price</th>
-                  <th>Less</th>
-                  <th>Packet</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-
-                {/* fetched items with actions */}
-                {/* pendingOrderRows fetched from DB */}
-                {matchedOrder.pendingOrderRows?.map((item, i) => (
-                  <tr key={`pendingRow-${i}`} className="pending-row">
-                    <td>{(matchedOrder.items?.length || 0) + i + 1}</td>
-                    <td>{item.productName}</td>
-                    <td>{`${item.qty} ${item.unit}`}</td>
-                    <td>{item.weight || '-'}</td>
-                    <td>₹{item.price}</td>
-                    <td>{item.less || '-'}</td>
-                    <td>{item.packet ?? '-'}</td>
-                    <td>{'-'}</td>
+              <table className="order-table">
+                <thead>
+                  <tr>
+                    <th>Sr No</th>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Weight</th>
+                    <th>Price</th>
+                    <th>Less</th>
+                    <th>Packet</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
+                </thead>
+                <tbody>
 
-                {matchedOrder.items?.map((item, i) => (
-                  <tr key={i}>
-                    <td>{i + 1}</td>
-                    <td>{item.productName}</td>
-                    <td>{`${item.qty} ${item.unit}`}</td>
-                    <td>{item.weight || '-'}</td>
-                    <td>₹{item.price}</td>
-                    <td>{item.less || '-'}</td>
-                    <td>{item.packet || '-'}</td>
-                    <td>{'-'}</td>
-                  </tr>
-                ))}
+                  {/* fetched items with actions */}
+                  {/* pendingOrderRows fetched from DB */}
+                  {matchedOrder.pendingOrderRows?.map((item, i) => (
+                    <tr key={`pendingRow-${i}`} className="pending-row">
+                      <td>{(matchedOrder.items?.length || 0) + i + 1}</td>
+                      <td>{item.productName}</td>
+                      <td>{`${item.qty} ${item.unit}`}</td>
+                      <td>{item.weight || '-'}</td>
+                      <td>₹{item.price}</td>
+                      <td>{item.less || '-'}</td>
+                      <td>{item.packet ?? '-'}</td>
+                      <td>{'-'}</td>
+                    </tr>
+                  ))}
+
+                  {matchedOrder.items?.map((item, i) => (
+                    <tr key={i}>
+                      <td>{i + 1}</td>
+                      <td>{item.productName}</td>
+                      <td>{`${item.qty} ${item.unit}`}</td>
+                      <td>{item.weight || '-'}</td>
+                      <td>₹{item.price}</td>
+                      <td>{item.less || '-'}</td>
+                      <td>{item.packet || '-'}</td>
+                      <td>{'-'}</td>
+                    </tr>
+                  ))}
 
 
-                {/* pending items with actions */}
-                {pendingOrders.map((item, i) => (
-                  <tr key={i} className="pending-row">
-                    <td>{i + 1}</td>
-                    <td>{item.productName}</td>
-                    <td>{`${item.qty ?? item.remainingQty} ${item.unit}`}</td>
-                    <td>{item.weight || '-'}</td>
-                    <td>₹{item.price}</td>
-                    <td>
-                      {item.less
-                        ? (item.less.endsWith('%') ? item.less : item.less)
-                        : '-'}
-                    </td>
-                    <td>{item.packet ?? '-'}</td>
-                    <td>
-                      <button onClick={() => handleEdit('pending', i)}>Edit</button>
-                      <button onClick={() => deletePendingItem(i)}>Delete</button>
-                      <button onClick={() => removePendingItemUI(i)}>Remove</button>
-                    </td>
-                  </tr>
-                ))}
+                  {/* pending items with actions */}
+                  {pendingOrders.map((item, i) => (
+                    <tr key={i} className="pending-row">
+                      <td>{i + 1}</td>
+                      <td>{item.productName}</td>
+                      <td>{`${item.qty ?? item.remainingQty} ${item.unit}`}</td>
+                      <td>{item.weight || '-'}</td>
+                      <td>₹{item.price}</td>
+                      <td>
+                        {item.less
+                          ? (item.less.endsWith('%') ? item.less : item.less)
+                          : '-'}
+                      </td>
+                      <td>{item.packet ?? '-'}</td>
+                      <td>
+                        <button onClick={() => handleEdit('pending', i)}>Edit</button>
+                        <button onClick={() => deletePendingItem(i)}>Delete</button>
+                        <button onClick={() => removePendingItemUI(i)}>Remove</button>
+                      </td>
+                    </tr>
+                  ))}
 
-                {/* new items with actions */}
-                {newItemsList.map((item, i) => (
-                  <tr key={`new-${i}`}>
-                    <td>{pendingOrders.length + i + 1}</td>
-                    <td>{item.productName}</td>
-                    <td>{`${item.qty} ${item.unit}`}</td>
-                    <td>{item.weight || '-'}</td>
-                    <td>₹{item.price}</td>
-                    <td>{item.less || '-'}</td>
-                    <td>{item.packet ?? '-'}</td>
-                    <td>
-                      <button onClick={() => handleEdit('new', i)}>Edit</button>
-                      <button onClick={() => deleteNewItem(i)}>Delete</button>
-                    </td>
-                  </tr>
-                ))}
+                  {/* new items with actions */}
+                  {newItemsList.map((item, i) => (
+                    <tr key={`new-${i}`}>
+                      <td>{pendingOrders.length + i + 1}</td>
+                      <td>{item.productName}</td>
+                      <td>{`${item.qty} ${item.unit}`}</td>
+                      <td>{item.weight || '-'}</td>
+                      <td>₹{item.price}</td>
+                      <td>{item.less || '-'}</td>
+                      <td>{item.packet ?? '-'}</td>
+                      <td>
+                        <button onClick={() => handleEdit('new', i)}>Edit</button>
+                        <button onClick={() => deleteNewItem(i)}>Delete</button>
+                      </td>
+                    </tr>
+                  ))}
 
-              </tbody>
-            </table>
+                </tbody>
+              </table>
             </div>
           </div>
           {newItemsList.length > 0 && (
             <div style={{ textAlign: "center", marginTop: "20px" }}>
               <button
                 onClick={async () => {
+                  setLoading(true); // start loader
                   try {
                     if (!matchedOrder?.user || !matchedOrder?.orderId) {
                       alert("No order selected!");
                       return;
                     }
-                    
+
                     const items = newItemsList.map(
                       ({ productName, qty, unit, weight, price, less, packQty, packet }) => ({
                         productName,
@@ -662,12 +664,16 @@ const EditAddProduct = () => {
 
                     alert("Items added to order!");
                   } catch (err) {
-                    alert("Error adding items: " + err.message);
+                    alert("Error: " + err.message);
+                  } finally {
+                    setLoading(false); // stop loader
                   }
                 }}
+                disabled={loading}
               >
-                Add Order
+                {loading ? <div className="loader"></div> : "Add Order"}
               </button>
+
             </div>
           )}
 

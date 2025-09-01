@@ -14,6 +14,8 @@ const ViewItems = () => {
   const [editId, setEditId] = useState(null);
   const [editField1, setEditField1] = useState('');
   const [editField2, setEditField2] = useState('');
+  const [editField3, setEditField3] = useState('');
+
 
   // Fetch data from Firebase when option changes
   useEffect(() => {
@@ -26,10 +28,12 @@ const ViewItems = () => {
       const list = Object.keys(data).map((id) => {
         if (selectedOption === 'customer') {
           return {
-            id,
-            name: data[id].name || 'Unknown',
-            city: data[id].city || '',
-          };
+  id,
+  name: data[id].name || 'Unknown',
+  city: data[id].city || '',
+  number: data[id].number || ''   // ✅ add this
+};
+
         } else {
           let fullName = data[id].name || 'Unknown';
           let name = fullName;
@@ -71,36 +75,46 @@ const ViewItems = () => {
   };
 
   // Start editing
-  const handleEdit = (item) => {
-    setEditId(item.id);
-    setEditField1(item.name);
-    setEditField2(selectedOption === 'customer' ? item.city : item.qty); // 🔹 Changed from price to qty
-  };
+const handleEdit = (item) => {
+  setEditId(item.id);
+  setEditField1(item.name);
+  setEditField2(selectedOption === 'customer' ? item.city : item.qty);
+  if (selectedOption === 'customer') {
+    setEditField3(item.number || ''); // number already includes +91 now
+  }
+};
 
-  // Save updated data
-  // Save updated data
+
+
+// Save updated data
 // Save updated data
 const handleSave = async (id) => {
-  if (!editField1.trim() || !editField2.trim()) {
-    alert('Fields cannot be empty');
-    return;
-  }
+ if (!editField1.trim() || !editField2.trim() || !editField3.trim()) {
+  alert('Fields cannot be empty');
+  return;
+}
+if (!/^\+91\d{10}$/.test(editField3)) {
+  alert('Number must be in format +911234567890');
+  return;
+}
+
   const path = selectedOption === 'customer' ? 'customers' : 'products';
   let updateData;
 
-  if (selectedOption === 'customer') {
-    // ✅ Get old values before updating
-    const customerSnap = await get(ref(database, `${path}/${id}`));
-    if (!customerSnap.exists()) return;
-    const oldData = customerSnap.val();
-    const oldName = oldData.name;
-    const oldCity = oldData.city;
+if (selectedOption === 'customer') {
+  // ✅ Get old values before updating
+  const customerSnap = await get(ref(database, `${path}/${id}`));
+  if (!customerSnap.exists()) return;
+  const oldData = customerSnap.val();
+  const oldName = oldData.name;
+  const oldCity = oldData.city;
 
-    // 1️⃣ Update customer in `customers`
-    updateData = { name: editField1, city: editField2 };
-    await update(ref(database, `${path}/${id}`), updateData);
+  // 1️⃣ Update customer in `customers`
+updateData = { name: editField1, city: editField2, number: editField3 }; // 🔹 number has +91
+await update(ref(database, `${path}/${id}`), updateData);
 
-    // 2️⃣ Search all sellOrders & update customerName/city if matches
+
+    // 2️⃣ Update in sellOrders
     const sellOrdersSnap = await get(ref(database, 'sellOrders'));
     if (sellOrdersSnap.exists()) {
       const updates = {};
@@ -118,6 +132,26 @@ const handleSave = async (id) => {
         await update(ref(database), updates);
       }
     }
+
+    // 3️⃣ Update in pendingOrders
+    const pendingOrdersSnap = await get(ref(database, 'pendingOrders'));
+    if (pendingOrdersSnap.exists()) {
+      const updates = {};
+      const pendingOrders = pendingOrdersSnap.val();
+
+      Object.keys(pendingOrders).forEach((orderId) => {
+        const order = pendingOrders[orderId];
+        if (order.customerName === oldName || order.city === oldCity) {
+          updates[`pendingOrders/${orderId}/customerName`] = editField1;
+          updates[`pendingOrders/${orderId}/city`] = editField2;
+        }
+      });
+
+      if (Object.keys(updates).length > 0) {
+        await update(ref(database), updates);
+      }
+    }
+
   } else {
     // ✅ recombine name + qty into single string for Firebase
     const newName = `${editField1} (${editField2})`;
@@ -130,7 +164,7 @@ const handleSave = async (id) => {
     // 2️⃣ Update product in `products`
     await update(ref(database, `${path}/${id}`), { name: newName });
 
-    // 3️⃣ Search all sellOrders & update productName if matches oldName
+    // 3️⃣ Update productName in sellOrders
     const sellOrdersSnap = await get(ref(database, 'sellOrders'));
     if (sellOrdersSnap.exists()) {
       const updates = {};
@@ -143,6 +177,24 @@ const handleSave = async (id) => {
             updates[`sellOrders/${orderId}/items/${itemKey}/productName`] = newName;
           }
         });
+      });
+
+      if (Object.keys(updates).length > 0) {
+        await update(ref(database), updates);
+      }
+    }
+
+    // 4️⃣ Update productName in pendingOrders
+    const pendingOrdersSnap = await get(ref(database, 'pendingOrders'));
+    if (pendingOrdersSnap.exists()) {
+      const updates = {};
+      const pendingOrders = pendingOrdersSnap.val();
+
+      Object.keys(pendingOrders).forEach((orderId) => {
+        const order = pendingOrders[orderId];
+        if (order.productName === oldName) {
+          updates[`pendingOrders/${orderId}/productName`] = newName;
+        }
       });
 
       if (Object.keys(updates).length > 0) {
@@ -208,6 +260,10 @@ const handleSave = async (id) => {
                     <th style={{ border: '1px solid #ccc', padding: '8px' }}>
                       {selectedOption === 'customer' ? 'City' : 'Qty'} {/* 🔹 Changed from Price to Qty */}
                     </th>
+                    {selectedOption === 'customer' && (
+  <th style={{ border: '1px solid #ccc', padding: '8px' }}>Number</th>
+)}
+
                     <th style={{ border: '1px solid #ccc', padding: '8px' }}>Actions</th>
                   </tr>
                 </thead>
@@ -240,6 +296,35 @@ const handleSave = async (id) => {
                           item.qty // 🔹 Changed from price to qty
                         )}
                       </td>
+                     {selectedOption === 'customer' && (
+  <td style={{ border: '1px solid #ccc', padding: '8px' }}>
+    {editId === item.id ? (
+      <input
+        type="text"
+        value={editField3}
+        onChange={(e) => {
+          let val = e.target.value;
+
+          // ✅ always force +91 prefix
+          if (!val.startsWith('+91')) {
+            val = '+91' + val.replace(/\D/g, '');
+          }
+
+          // ✅ allow only +91 + 10 digits
+          const digits = val.replace('+91', '').replace(/\D/g, '').slice(0, 10);
+          setEditField3('+91' + digits);
+        }}
+        style={{ width: '100%' }}
+      />
+    ) : (
+      item.number
+    )}
+  </td>
+)}
+
+
+
+
                       <td style={{ border: '1px solid #ccc', padding: '8px', textAlign: 'center' }}>
                         {editId === item.id ? (
                           <>

@@ -30,6 +30,9 @@ const OrderPage = () => {
     [highlightedCustIndex, setHighlightedCustIndex] = useState(-1),
     [highlightedProdIndex, setHighlightedProdIndex] = useState(-1);
   const [justSelectedProduct, setJustSelectedProduct] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  
 
 
 
@@ -80,6 +83,7 @@ const OrderPage = () => {
     setProdSuggestions([]);
     return;
   }
+  
     setValidProduct(false);
     refDebProd.current = setTimeout(async () => {
       try {
@@ -99,8 +103,6 @@ const OrderPage = () => {
       less: null
     };
   });
-
-
         if (custName?.trim()) {
           const sellRes = await fetch(`${URL}/sellOrders.json`), sellData = await sellRes.json();
           if (sellData) {
@@ -131,6 +133,8 @@ const OrderPage = () => {
     setJustSelectedProduct(false);  // reset only when product field is empty
   }
 }, [productName]);
+
+
 
 
 
@@ -260,6 +264,7 @@ const OrderPage = () => {
   };
 
   const placeOrder = async (c) => {
+    setLoading(true);
     try {
       // 1️⃣ Generate unique ID directly for orders path
       const newCustRes = await fetch(`${URL}/orders/${userName}.json`, {
@@ -273,8 +278,6 @@ const OrderPage = () => {
           items: [],
           pendingOrderRows: []
         })
-
-
       });
 
       const newCustData = await newCustRes.json();
@@ -346,8 +349,10 @@ const OrderPage = () => {
       resetAllFields();
 
     } catch (err) {
-      alert('Error: ' + err.message);
-    }
+    alert('Error: ' + err.message);
+  } finally {
+    setLoading(false); // stop loader
+  }
   };
 
 
@@ -392,6 +397,7 @@ const OrderPage = () => {
   const pendingList = pendingOrders.map(p => ({ ...p, isPending: true })),
     newItemsList = customers[custName]?.items || [],
     combinedItems = [...pendingList, ...newItemsList];
+  
 
   return (
     <div className="orderpage-container">
@@ -530,7 +536,10 @@ const OrderPage = () => {
               </table>
             </div>
 
-            <button onClick={() => placeOrder(custName)}>Place Order</button>
+            <button onClick={() => placeOrder(custName)} disabled={loading}>
+  {loading ? <div className="loader"></div> : "Place Order"}
+</button>
+
           </div>
         </div>
       )}

@@ -4,7 +4,6 @@ import './Style.css';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue, set, push, remove } from 'firebase/database';
 import { update, get } from "firebase/database";
-import OrderPage from './OrderPage';  // ✅ Import component
 import EditAddProduct from './EditAddProduct';
 
 const firebaseConfig = {
@@ -31,6 +30,8 @@ const ViewOrder = () => {
   const navigate = useNavigate();
   const isAuthorizedUser = name => ['huzaifa bhai', 'ammar bhai'].includes(name.toLowerCase());
   const isAuthorizedAdd = name => ['huzaifa bhai', 'ammar bhai'].includes(name.toLowerCase());
+
+
 
   useEffect(() => {
     const storedUser = localStorage.getItem('userName');
@@ -82,6 +83,8 @@ const ViewOrder = () => {
 
   // Replace the existing handleSellOrder function with this:
 
+
+
   const handleSellOrder = (user, customerName, orderData, orderId) => {
     // Normal items
     const normalItems = (orderData.items || []).map(i => ({
@@ -117,77 +120,120 @@ const ViewOrder = () => {
   const saveEdit = async () => {
     const { user, customerName, city, items, orderId } = editOrderData;
 
-     if (!transportName.trim()) {
-    return alert("Transport Name is required.");
-  }
-
-
-    for (const i of items) {
-      const avail = +i.qty || 0;
-      const sell = +i.sellQty;
-      if (isNaN(sell) || sell < 0) return alert('Please enter valid Sell Qty for all items.');
-      if (!i.price || !i.less) return alert('Price and Less fields are required for all items.');
+    if (!transportName.trim()) {
+      return alert("Transport Name is required.");
     }
 
-    // ✅ Filter out items with sellQty = 0
-    const processed = items
-      .filter(i => +i.sellQty > 0)
-      .map(i => ({
-        ...i,
-        originalQty: +i.qty,
-        soldQty: +i.sellQty,
-        remainingQty: +i.qty - +i.sellQty
-      }));
+    for (const i of items) {
+  if (i.sellQty === "" || i.sellQty === null || i.sellQty === undefined) {
+    return alert("Sell Qty is required for all items.");
+  }
+
+  const sell = +i.sellQty;
+  if (isNaN(sell) || sell < 0) {
+    return alert("Please enter valid Sell Qty for all items.");
+  }
+
+  if (!i.price || !i.less) {
+    return alert("Price and Less fields are required for all items.");
+  }
+}
 
 
-    // ✅ Now this will fetch phone from Firebase and then print
-    await handlePrint(customerName, city, processed, transportName);
+    // ✅ Split items: >0 goes to sellOrders, =0 goes to pendingOrders
+    const sellItems = [];
+    const pendingItems = [];
 
-    await push(ref(db, 'sellOrders'), {
-      user,
-      customerName,
-      city,
-      transportName: transportName || '',  // ✅ added transport name
-      timestamp: new Date().toISOString(),
-      items: processed.map(i => ({
-        productName: i.productName,
-        originalQty: i.originalQty,
-        soldQty: i.soldQty,
-        unit: i.unit,
-        weight: i.weight,
-        price: i.price,
-        less: i.less,
-        packet: i.packet || ''   // ✅ already added packet
-      }))
-    });
+    items.forEach(i => {
+      const sell = +i.sellQty;
+      const avail = +i.qty || 0;
 
-    processed.forEach(i => {
-      if (i.remainingQty > 0) {
-        push(ref(db, 'pendingOrders'), {
-          user,
-          customerName,
-          city: city || '',
-          productName: i.productName,
-          soldQty: i.soldQty,
-          remainingQty: i.remainingQty,
-          unit: i.unit,
-          weight: i.weight || '',
-          price: i.price,
-          less: i.less || '',
-          packet: i.packet || '',
-          timestamp: new Date().toISOString()
+      if (sell > 0) {
+        sellItems.push({
+          ...i,
+          originalQty: avail,
+          soldQty: sell,
+          remainingQty: avail - sell
+        });
+      } else {
+        // ✅ full row into pending
+        pendingItems.push({
+          ...i,
+          originalQty: avail,
+          soldQty: 0,
+          remainingQty: avail
         });
       }
     });
 
-    await remove(ref(db, `orders/${user}/${orderId}`));
+    // ✅ Only print + push sellOrders if there are sold items
+    if (sellItems.length > 0) {
+      await handlePrint(customerName, city, sellItems, transportName);
 
+      await push(ref(db, 'sellOrders'), {
+        user,
+        customerName,
+        city,
+        transportName: transportName || '',
+        timestamp: new Date().toISOString(),
+        items: sellItems.map(i => ({
+          productName: i.productName,
+          originalQty: i.originalQty,
+          soldQty: i.soldQty,
+          unit: i.unit,
+          weight: i.weight,
+          price: i.price,
+          less: i.less,
+          packet: i.packet || ''
+        }))
+      });
+
+      // ✅ Remaining qty > 0 from sold rows → pending
+      sellItems.forEach(i => {
+        if (i.remainingQty > 0) {
+          pendingItems.push({
+            user,
+            customerName,
+            city: city || '',
+            productName: i.productName,
+            soldQty: i.soldQty,
+            remainingQty: i.remainingQty,
+            unit: i.unit,
+            weight: i.weight || '',
+            price: i.price,
+            less: i.less || '',
+            packet: i.packet || '',
+            timestamp: new Date().toISOString()
+          });
+        }
+      });
+    }
+
+    // ✅ Push all pending rows (both sell=0 and remaining from sold)
+    for (const i of pendingItems) {
+      await push(ref(db, 'pendingOrders'), {
+        user,
+        customerName,
+        city: i.city || city || '',
+        productName: i.productName,
+        soldQty: i.soldQty,
+        remainingQty: i.remainingQty,
+        unit: i.unit,
+        weight: i.weight || '',
+        price: i.price,
+        less: i.less || '',
+        packet: i.packet || '',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // ✅ Remove original order after processing
+    await remove(ref(db, `orders/${user}/${orderId}`));
     setOrders(p => p.filter(o => !(o.user === user && o.orderId === orderId)));
     setShowModal(false);
   };
 
   const cleanProductName = n => n.replace(/\s*\([^)]*\)/g, '').trim();
-
   const printSoldItems = (customerName, city, sold, phoneNumber, transportName) => {
     const date = new Date().toLocaleDateString();
     const w = window.open('', '_blank', 'width=800,height=600');
@@ -196,36 +242,85 @@ const ViewOrder = () => {
   <head>
     <title>Sold Items</title>
     <style>
-      body { font-family: Arial; padding: 20px; }
-      table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-      th, td { border: 1px solid #000; padding: 8px; text-align: center; }
+      @page {
+        size: A5;
+        margin: 10mm;
+      }
+      body {
+        font-family: Arial;
+        padding: 20px;
+        transform: scale(0.85);
+        transform-origin: top left;
+        counter-reset: page;
+      }
+      h2 {
+        text-align: center;
+        margin-bottom: 10px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+        font-size: 12px;
+      }
+      th, td {
+        border: 1px solid #000;
+        padding: 6px;
+        text-align: center;
+      }
+      thead {
+        display: table-header-group; /* ✅ Repeat header on every page */
+      }
+      .page-number:after {
+        counter-increment: page;
+        content: "Page " counter(page);
+      }
     </style>
   </head>
   <body>
-    <div><strong>Customer:</strong> ${customerName}</div>
-    <div><strong>City:</strong> ${city}</div>
-    <div><strong>Phone:</strong> ${phoneNumber || '-'}</div>
-    <div><strong>Transport:</strong> ${transportName || '-'}</div>  <!-- ✅ added transport -->
-    <div><strong>Date:</strong> ${date}</div>
     <table>
       <thead>
-        <tr><th>Product</th><th>Sold Qty</th><th>Weight</th><th>Less</th><th>Price</th><th>Packet</th></tr>
+        <tr>
+          <th colspan="7" style="text-align:right;">
+            <span class="page-number"></span>
+          </th>
+        </tr>
+        <tr>
+          <th colspan="7">
+            <h2>Sold Items</h2>
+            <div><strong>Customer:</strong> ${customerName}</div>
+            <div><strong>City:</strong> ${city}</div>
+            <div><strong>Phone:</strong> ${phoneNumber || '-'}</div>
+            <div><strong>Transport:</strong> ${transportName || '-'}</div>
+            <div><strong>Date:</strong> ${date}</div>
+          </th>
+        </tr>
+        <tr>
+          <th>Sr No.</th>
+          <th>Product</th>
+          <th>Sold Qty</th>
+          <th>Weight</th>
+          <th>Price</th>
+          <th>Less</th>
+          <th>Packet</th>
+        </tr>
       </thead>
       <tbody>
-  ${(sold || []).map(i => `
-    <tr>
-      <td>${cleanProductName(i.productName)}</td>
-      <td>${i.soldQty} ${i.unit || ''}</td>  <!-- ✅ show sold qty with unit -->
-      <td>${i.weight || '-'}</td>
-      <td>${(typeof i.less === 'number' || (typeof i.less === 'string' && !isNaN(Number(i.less))))
+        ${(sold || []).map((i, idx) => `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${cleanProductName(i.productName)}</td>
+            <td>${i.soldQty} ${i.unit || ''}</td>
+            <td>${i.weight || '-'}</td>
+            <td>${i.price}</td>
+            <td>${(typeof i.less === 'number' || (typeof i.less === 'string' && !isNaN(Number(i.less))))
         ? i.less + '%'
         : (i.less || '-')
       }</td>
-      <td>₹${i.price}</td>
-      <td>${i.packet || '-'}</td>  <!-- ✅ show packet -->
-    </tr>
-  `).join('')}
-</tbody>
+            <td>${i.packet || '-'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
     </table>
     <script>
       window.onload = () => {
@@ -242,7 +337,6 @@ const ViewOrder = () => {
     try {
       const snapshot = await get(ref(db, "customers"));
       let phoneNumber = "-";
-
       if (snapshot.exists()) {
         const customers = snapshot.val();
         for (let key in customers) {
@@ -252,14 +346,12 @@ const ViewOrder = () => {
           }
         }
       }
-
       printSoldItems(customerName, city, sold, phoneNumber, transportName);
     } catch (err) {
       console.error("Error fetching phone:", err);
       printSoldItems(customerName, city, sold, "-");
     }
   };
-
   // --- Edit and Delete for normal order rows ---
   const startEditRow = (orderKey, item, rowIndex) => {
     setEditingRow({ orderKey, rowIndex, isPending: false });
@@ -272,20 +364,34 @@ const ViewOrder = () => {
       packet: item.packet || ''
     });
   };
-
   const saveRowEdit = async (user, orderId, idx) => {
     const orderRef = ref(db, `orders/${user}/${orderId}/items`);
     onValue(orderRef, async snap => {
       const dbItems = snap.val();
       if (Array.isArray(dbItems)) {
-        dbItems[idx] = editedItem;
-        const filtered = dbItems.filter(i => i.qty > 0);
+        let updatedItem = { ...editedItem };
+        // ✅ If productName contains "(X pcs)" and qty entered
+        const match = updatedItem.productName?.match(/\((\d+)\s*pcs\)/i);
+        if (match && updatedItem.qty) {
+          const pcsPerPacket = parseInt(match[1], 10);
+          const enteredPackets = parseInt(updatedItem.qty, 10);
+          if (!isNaN(enteredPackets)) {
+            updatedItem.packet = enteredPackets;                        // user input → pk
+            updatedItem.qty = `${enteredPackets * pcsPerPacket} pcs`;   // keep unit
+          }
+        }
+        dbItems[idx] = updatedItem;
+        const filtered = dbItems.filter(i => parseInt(i.qty) > 0);
         if (!filtered.length) {
           await remove(ref(db, `orders/${user}/${orderId}`));
           setOrders(p => p.filter(o => !(o.user === user && o.key === `${user}_${orderId}`)));
         } else {
           await set(orderRef, filtered);
-          setOrders(p => p.map(o => o.key === `${user}_${orderId}` ? { ...o, orderData: { ...o.orderData, items: filtered } } : o));
+          setOrders(p => p.map(o =>
+            o.key === `${user}_${orderId}`
+              ? { ...o, orderData: { ...o.orderData, items: filtered } }
+              : o
+          ));
         }
         setEditingRow({ orderKey: null, rowIndex: null, isPending: false });
         setEditedItem(null);
@@ -293,46 +399,41 @@ const ViewOrder = () => {
     }, { onlyOnce: true });
   };
   const deleteRow = async (user, orderId, idx) => {
-  if (!window.confirm('Are you sure you want to delete this item?')) return;
-
-  const orderRef = ref(db, `orders/${user}/${orderId}`);
-  const itemsRef = ref(db, `orders/${user}/${orderId}/items`);
-
-  onValue(itemsRef, async snap => {
-    let dbItems = snap.val();
-    if (Array.isArray(dbItems)) {
-      dbItems.splice(idx, 1);
-
-      if (!dbItems.length) {
-        // check if pendingOrderRows still exist
-        const pendingSnap = await get(ref(db, `orders/${user}/${orderId}/pendingOrderRows`));
-        const pending = pendingSnap.val();
-
-        if (!pending || !pending.length) {
-          // ✅ remove order only if no items AND no pending rows
-          await remove(orderRef);
-          setOrders(p => p.filter(o => !(o.user === user && o.key === `${user}_${orderId}`)));
+    if (!window.confirm('Are you sure you want to delete this item?')) return;
+    const orderRef = ref(db, `orders/${user}/${orderId}`);
+    const itemsRef = ref(db, `orders/${user}/${orderId}/items`);
+    onValue(itemsRef, async snap => {
+      let dbItems = snap.val();
+      if (Array.isArray(dbItems)) {
+        dbItems.splice(idx, 1);
+        if (!dbItems.length) {
+          // check if pendingOrderRows still exist
+          const pendingSnap = await get(ref(db, `orders/${user}/${orderId}/pendingOrderRows`));
+          const pending = pendingSnap.val();
+          if (!pending || !pending.length) {
+            // ✅ remove order only if no items AND no pending rows
+            await remove(orderRef);
+            setOrders(p => p.filter(o => !(o.user === user && o.key === `${user}_${orderId}`)));
+          } else {
+            // ✅ keep order since pending rows exist
+            await set(itemsRef, []);
+            setOrders(p => p.map(o =>
+              o.key === `${user}_${orderId}`
+                ? { ...o, orderData: { ...o.orderData, items: [] } }
+                : o
+            ));
+          }
         } else {
-          // ✅ keep order since pending rows exist
-          await set(itemsRef, []);
-          setOrders(p => p.map(o => 
-            o.key === `${user}_${orderId}` 
-              ? { ...o, orderData: { ...o.orderData, items: [] } } 
+          await set(itemsRef, dbItems);
+          setOrders(p => p.map(o =>
+            o.key === `${user}_${orderId}`
+              ? { ...o, orderData: { ...o.orderData, items: dbItems } }
               : o
           ));
         }
-      } else {
-        await set(itemsRef, dbItems);
-        setOrders(p => p.map(o => 
-          o.key === `${user}_${orderId}` 
-            ? { ...o, orderData: { ...o.orderData, items: dbItems } } 
-            : o
-        ));
       }
-    }
-  }, { onlyOnce: true });
-};
-
+    }, { onlyOnce: true });
+  };
   // --- New: Edit and Delete for pendingOrderRows ---
   const startEditPendingRow = (orderKey, item, rowIndex) => {
     setEditingRow({ orderKey, rowIndex, isPending: true });
@@ -343,10 +444,17 @@ const ViewOrder = () => {
     onValue(pendingRef, async snap => {
       const pendingItems = snap.val();
       if (Array.isArray(pendingItems)) {
-        pendingItems[idx] = editedItem;
+        let updatedItem = { ...editedItem };
+        // ✅ Apply same logic for pending rows
+        const match = updatedItem.productName?.match(/\((\d+)\s*pcs\)/i);
+        if (match && updatedItem.qty) {
+          const pcsPerPacket = parseInt(match[1], 10);
+          updatedItem.packet = updatedItem.qty;              // user’s entered number → packets
+          updatedItem.qty = updatedItem.qty * pcsPerPacket; // convert to pcs
+        }
+        pendingItems[idx] = updatedItem;
         const filtered = pendingItems.filter(i => i.qty > 0);
         if (!filtered.length) {
-          // Remove whole order if no items and no pendingOrderRows
           await set(pendingRef, null);
           const orderRef = ref(db, `orders/${user}/${orderId}`);
           onValue(orderRef, snap2 => {
@@ -366,54 +474,47 @@ const ViewOrder = () => {
     }, { onlyOnce: true });
   };
   const deletePendingRow = async (user, orderId, idx) => {
-  if (!window.confirm('Are you sure you want to delete this pending item?')) return;
-
-  const orderRef = ref(db, `orders/${user}/${orderId}`);
-  const pendingRef = ref(db, `orders/${user}/${orderId}/pendingOrderRows`);
-
-  onValue(pendingRef, async snap => {
-    let pendingItems = snap.val();
-    if (Array.isArray(pendingItems)) {
-      pendingItems.splice(idx, 1);
-
-      if (!pendingItems.length) {
-        // check if normal items still exist
-        const itemsSnap = await get(ref(db, `orders/${user}/${orderId}/items`));
-        const items = itemsSnap.val();
-
-        if (!items || !items.length) {
-          // ✅ remove order only if no items AND no pending rows
-          await remove(orderRef);
-          setOrders(p => p.filter(o => !(o.user === user && o.key === `${user}_${orderId}`)));
+    if (!window.confirm('Are you sure you want to delete this pending item?')) return;
+    const orderRef = ref(db, `orders/${user}/${orderId}`);
+    const pendingRef = ref(db, `orders/${user}/${orderId}/pendingOrderRows`);
+    onValue(pendingRef, async snap => {
+      let pendingItems = snap.val();
+      if (Array.isArray(pendingItems)) {
+        pendingItems.splice(idx, 1);
+        if (!pendingItems.length) {
+          // check if normal items still exist
+          const itemsSnap = await get(ref(db, `orders/${user}/${orderId}/items`));
+          const items = itemsSnap.val();
+          if (!items || !items.length) {
+            // ✅ remove order only if no items AND no pending rows
+            await remove(orderRef);
+            setOrders(p => p.filter(o => !(o.user === user && o.key === `${user}_${orderId}`)));
+          } else {
+            // ✅ keep order since items exist
+            await set(pendingRef, []);
+            setOrders(p => p.map(o =>
+              o.key === `${user}_${orderId}`
+                ? { ...o, orderData: { ...o.orderData, pendingOrderRows: [] } }
+                : o
+            ));
+          }
         } else {
-          // ✅ keep order since items exist
-          await set(pendingRef, []);
-          setOrders(p => p.map(o => 
-            o.key === `${user}_${orderId}` 
-              ? { ...o, orderData: { ...o.orderData, pendingOrderRows: [] } } 
+          await set(pendingRef, pendingItems);
+          setOrders(p => p.map(o =>
+            o.key === `${user}_${orderId}`
+              ? { ...o, orderData: { ...o.orderData, pendingOrderRows: pendingItems } }
               : o
           ));
         }
-      } else {
-        await set(pendingRef, pendingItems);
-        setOrders(p => p.map(o => 
-          o.key === `${user}_${orderId}` 
-            ? { ...o, orderData: { ...o.orderData, pendingOrderRows: pendingItems } } 
-            : o
-        ));
       }
-    }
-  }, { onlyOnce: true });
-};
-
+    }, { onlyOnce: true });
+  };
   const previewAndPrint = ({ user, customerName, orderData, orderId }) => {
     const w = window.open('', '_blank', 'width=800,height=600');
-
     const combinedRows = [
       ...(orderData.pendingOrderRows || []).map(r => ({ ...r, isPending: true })),
       ...(orderData.items || []).map(r => ({ ...r, isPending: false }))
     ];
-
     const html = `
   <html>
   <head>
@@ -428,6 +529,7 @@ const ViewOrder = () => {
             padding: 20px;
             transform: scale(0.85);
             transform-origin: top left;
+            counter-reset: page;
           }
           h2 {
             text-align: center;
@@ -454,11 +556,20 @@ const ViewOrder = () => {
             background-color: #f9f9f9;
             border-top: 2px solid #ccc;
           }
+          .page-number:after {
+            counter-increment: page;
+            content: "Page " counter(page);
+          }
       </style>
   </head>
   <body>
       <table>
         <thead>
+            <tr>
+                <th colspan="7" style="text-align:right;">
+                  <span class="page-number"></span>
+                </th>
+            </tr>
             <tr>
                 <th colspan="7">
                     <h2>Order Summary</h2>
@@ -473,40 +584,35 @@ const ViewOrder = () => {
                 <th>Product</th>
                 <th>Qty</th>
                 <th>Weight</th>
-                <th>Less</th>
                 <th>Price</th>
-                <th>Packet</th> <!-- ✅ Added -->
+                <th>Less</th>
+                <th>Packet</th>
             </tr>
         </thead>
         <tbody>
           ${combinedRows.map((i, index) => `
-              <tr class="${i.isPending ? 'pending-row' : ''}">
-                  <td>${index + 1}</td>
-                  <td>${cleanProductName(i.productName)}</td>
-                  <td>${i.originalQty || i.qty} ${i.unit || ''}</td>
-                  <td>${i.weight || '-'}</td>
-                  <td>${(typeof i.less === 'number' || (typeof i.less === 'string' && !isNaN(Number(i.less))))
+            <tr class="${i.isPending ? 'pending-row' : ''}">
+              <td>${index + 1}</td>
+              <td>${cleanProductName(i.productName)}</td>
+              <td>${i.originalQty || i.qty} ${i.unit || ''}</td>
+              <td>${i.weight || '-'}</td>
+              <td>${i.price}</td>
+              <td>${(typeof i.less === 'number' || (typeof i.less === 'string' && !isNaN(Number(i.less))))
         ? i.less + '%'
         : (i.less || '-')
       }</td>
-                  <td>₹${i.price}</td>
-                  <td>${i.packet || '-'}</td>
-              </tr>
+              <td>${i.packet || '-'}</td>
+            </tr>
           `).join('')}
         </tbody>
       </table>
   </body>
   </html>
   `;
-
     w.document.write(html);
     w.document.close();
     w.print();
   };
-
-
-
-
   window.deleteOrderFromFirebase = (user, customerName, orderId) => {
     const orderRef = ref(db, `orders/${user}/${customerName}/${orderId}`);
     remove(orderRef)
@@ -515,8 +621,6 @@ const ViewOrder = () => {
       })
       .catch(err => console.error('Error deleting order:', err));
   };
-
-
   // add order data
   // --- Function inside ViewOrder ---
   const handleAddOrder = async (orderId) => {
@@ -544,9 +648,6 @@ const ViewOrder = () => {
       console.error("Error closing modal:", err);
     }
   };
-
-
-
   return (
     <div className="orderpage-container">
       <h2 style={{ textAlign: 'center' }}>VIEW ORDERS</h2>
@@ -563,7 +664,7 @@ const ViewOrder = () => {
                 <strong>City:</strong> {orderData.city} <br />
                 <strong>Placed On:</strong> {orderData.timestamp}
               </div>
-              {(isAuthorizedAdd(userName) || userName === user) &&(
+              {(isAuthorizedAdd(userName) || userName === user) && (
                 <div className="order-action">
                   {/* ✅ Change Add button to open modal */}
                   <button onClick={() => handleAddOrder(orderId)}>Add</button>
@@ -611,7 +712,6 @@ const ViewOrder = () => {
                       <td>
                         {editedItem.sellQty || 0} {editedItem.unit}
                       </td>
-
                       <td>
                         <input
                           type="text"
@@ -672,7 +772,6 @@ const ViewOrder = () => {
                     </tr>
                   );
                 })}
-
                 {/* ---------------- NORMAL ORDER ITEMS ---------------- */}
                 {(orderData.items || []).map((item, i) => {
                   const srNo = (orderData.pendingOrderRows?.length || 0) + i + 1; // Continue numbering after pending
@@ -755,14 +854,9 @@ const ViewOrder = () => {
                 })}
               </tbody>
             </table>
-
-
           </div>
         ))
       )}
-
-
-
       {/* add order item sq */}
       {showAddModal && (
         <div className="modal-backdrop">
@@ -772,12 +866,7 @@ const ViewOrder = () => {
               width: "90%",
               height: "90%",
               background: "#fff",
-              borderRadius: "0px",
-              padding: "20px",
-              overflowY: "auto",
-              position: "fixed",
-              top: 20,
-              left: 40,
+              borderRadius: "10px",
               zIndex: 1000
             }}
           >
@@ -785,12 +874,9 @@ const ViewOrder = () => {
             <div style={{ textAlign: "center", marginTop: "15px" }}>
               <button onClick={handleCloseModal}>Close</button>
             </div>
-
           </div>
         </div>
       )}
-
-
       {showModal && editOrderData && (
         <div className="modal-backdrop">
           <div
@@ -825,7 +911,6 @@ const ViewOrder = () => {
                 }}
               />
             </div>
-
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
@@ -882,13 +967,11 @@ const ViewOrder = () => {
                             const value = e.target.value < 0 ? 0 : e.target.value;
                             const up = [...editOrderData.items];
                             up[idx].kgRate = value;
-
                             const weight = parseFloat(up[idx].weight) || 0;
                             const sellQty = parseFloat(up[idx].sellQty) || 1;
                             if (value && weight && sellQty > 0) {
                               up[idx].price = Math.ceil((value * weight) / sellQty);
                             }
-
                             setEditOrderData({ ...editOrderData, items: up });
                           }}
                         />
@@ -950,13 +1033,11 @@ const ViewOrder = () => {
               <button onClick={saveEdit} style={{ marginRight: '10px' }}>
                 Sell Order
               </button>
-
               {/* New Save Button */}
               <button
                 onClick={async () => {
                   if (!editOrderData) return;
                   const { user, orderId, orderData, items } = editOrderData;
-
                   const updatedItems = (items || []).map(item => ({
                     ...item,
                     sellQty: item.sellQty ?? "",
@@ -964,18 +1045,19 @@ const ViewOrder = () => {
                     price: item.price ?? 0,
                     packet: item.packet ?? ""
                   }));
-
                   try {
                     // ✅ Separate normal vs pending rows
-                    const normalItems = updatedItems.filter(i => !i.isPending);
-                    const pendingItems = updatedItems.filter(i => i.isPending);
-
+                    const normalItems = updatedItems.filter(i => !i.isPending && parseFloat(i.sellQty) > 0);
+                    const pendingItems = updatedItems.filter(i => i.isPending || parseFloat(i.sellQty) === 0);
                     // ✅ Update Firebase correctly
                     await update(ref(db, `orders/${user}/${orderId}`), {
                       ...orderData,
+                      transportName: transportName || "",   // ✅ added
                       items: normalItems,
                       pendingOrderRows: pendingItems
                     });
+
+
 
                     // ✅ Update local state
                     setOrders(prev =>
@@ -985,7 +1067,6 @@ const ViewOrder = () => {
                           : order
                       )
                     );
-
                     setEditOrderData(prev => ({
                       ...prev,
                       orderData: { ...orderData, items: normalItems, pendingOrderRows: pendingItems },
@@ -1001,7 +1082,6 @@ const ViewOrder = () => {
               >
                 Save
               </button>
-
               <button onClick={() => setShowModal(false)}>Cancel</button>
             </div>
 
