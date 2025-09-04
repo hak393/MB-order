@@ -36,7 +36,7 @@ const ViewOrder = () => {
   useEffect(() => {
     const storedUser = localStorage.getItem('userName');
     if (!storedUser) {
-      alert('User not found. Please log in again.');
+      showAlert('User not found. Please log in again.');
       navigate('/', { replace: true });
       return;
     }

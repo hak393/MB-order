@@ -247,34 +247,66 @@ const showAlert = (message, type = "error") => {
   };
 
   const addOrUpdate = () => {
-if (!custName || !city) return showAlert('Fill all required fields');
-if (!productName) return showAlert('Select valid product');
-if (!qty && !editing) return showAlert('Fill all required fields');
-    let finalQty = unit === 'pk' ? (qty ? parseFloat(qty) * parseFloat(selectedProdQty) : 0) : qty ? parseFloat(qty) : 0;
-    const less = lessUnit === '%'
+  // ✅ Only enforce dropdown selection in ADD mode
+  if (!editing) {
+    if (!validCustomer) return showAlert('Please select a valid customer from the list');
+    if (!validProduct) return showAlert('Please select a valid product from the list');
+  }
+
+  if (!custName || !city) return showAlert('Fill all required fields');
+  if (!productName) return showAlert('Select valid product');
+  if (!qty && !editing) return showAlert('Fill all required fields');
+
+  let finalQty =
+    unit === 'pk'
+      ? (qty ? parseFloat(qty) * parseFloat(selectedProdQty) : 0)
+      : qty
+      ? parseFloat(qty)
+      : 0;
+
+  const less =
+    lessUnit === '%'
       ? (lessVal ? `${lessVal} %` : '')
       : lessUnit; // for NET, pair, Full Bill, half Bill
 
-    const newItem = {
-  productName,
-  unit: selectedProdUnit,
-  less,
-  qty: finalQty,
-  weight,
-  price,
-  packQty: selectedProdQty,
-  packet: unit === 'pk' ? qty : '' // ✅ only keep packet if PK, else empty
-};
-
-
-    if (editing) {
-      if (editing.source === 'pending') setPendingOrders(p => p.map((x, i) => i === editing.index ? { ...x, ...newItem } : x));
-      else setCustomers(p => { const e = p[custName], items = [...(e?.items || [])]; items[editing.index] = newItem; return { ...p, [custName]: { ...e, items } }; });
-    } else {
-      setCustomers(p => { const e = p[custName] || { city, timestamp: new Date().toLocaleString(), items: [] }; return { ...p, [custName]: { ...e, items: [...(e.items || []), newItem] } }; });
-    }
-    resetForm();
+  const newItem = {
+    productName,
+    unit: selectedProdUnit,
+    less,
+    qty: finalQty,
+    weight,
+    price,
+    packQty: selectedProdQty,
+    packet: unit === 'pk' ? qty : '' // ✅ only keep packet if PK, else empty
   };
+
+  if (editing) {
+    if (editing.source === 'pending')
+      setPendingOrders(p =>
+        p.map((x, i) => (i === editing.index ? { ...x, ...newItem } : x))
+      );
+    else
+      setCustomers(p => {
+        const e = p[custName],
+          items = [...(e?.items || [])];
+        items[editing.index] = newItem;
+        return { ...p, [custName]: { ...e, items } };
+      });
+  } else {
+    setCustomers(p => {
+      const e = p[custName] || {
+        city,
+        timestamp: new Date().toLocaleString(),
+        items: []
+      };
+      return {
+        ...p,
+        [custName]: { ...e, items: [...(e.items || []), newItem] }
+      };
+    });
+  }
+  resetForm();
+};
 
   const resetForm = () => {
     setProductName(''); setUnit('pk'); setLessVal(''); setLessUnit('%'); setQty(''); setWeight(''); setPrice('');
@@ -428,7 +460,7 @@ showAlert(`Order placed for customer "${c}"`);
     try {
       await fetch(`${URL}/pendingOrders/${key}.json`, { method: 'DELETE' });
       setPendingOrders(p => p.filter((_, x) => x !== i));
-    } catch { alert('Failed to delete pending item'); }
+    } catch { showAlert('Failed to delete pending item'); }
   };
   const removePendingItemUI = i => setPendingOrders(p => p.filter((_, x) => x !== i));
   const deleteNewItem = i => setCustomers(p => { const e = p[custName]; return { ...p, [custName]: { ...e, items: e.items.filter((_, x) => x !== i) } }; });
@@ -449,31 +481,44 @@ showAlert(`Order placed for customer "${c}"`);
 
         <input placeholder="City" value={city} onChange={e => setCity(e.target.value)} />
         <div className="autocomplete-wrapper" style={{ position: 'relative' }}>
-          <input placeholder="Product" value={productName} onChange={e => setProductName(e.target.value)} onKeyDown={handleProductKeyDown} onBlur={handleProductBlur} autoComplete="off" className={productError ? 'input-error' : ''} ref={productInputRef} />
-          {prodSuggestions.length > 0 && (
-  <ul
-    className="suggestions-dropdown"
-    ref={productListRef}
-    style={{ position: 'absolute', zIndex: 10 }}
-  >
-    {prodSuggestions.map((p, i) => (
-      <li
-        key={i}
-        className={i === highlightedProdIndex ? 'highlighted' : ''}
-        onClick={() => selectProduct(p)}
-      >
-        {p.name}
-        {(p.price || p.less) && (
-          <> — {p.price && <>Price {p.price}</>}
-          {p.price && p.less && ' / '}
-          {p.less && <>Less {p.less}</>}
-          </>
-        )}
-      </li>
-    ))}
-  </ul>
-)}
-        </div>
+  <input
+    placeholder="Product"
+    value={productName}
+    onChange={e => setProductName(e.target.value)}
+    onKeyDown={handleProductKeyDown}
+    onBlur={handleProductBlur}
+    autoComplete="off"
+    className={productError ? 'input-error' : ''}
+    ref={productInputRef}
+    disabled={!!editing}   // ✅ disable in update mode
+  />
+
+  {/* ✅ Only show dropdown in Add mode */}
+  {!editing && prodSuggestions.length > 0 && (
+    <ul
+      className="suggestions-dropdown"
+      ref={productListRef}
+      style={{ position: 'absolute', zIndex: 10 }}
+    >
+      {prodSuggestions.map((p, i) => (
+        <li
+          key={i}
+          className={i === highlightedProdIndex ? 'highlighted' : ''}
+          onClick={() => selectProduct(p)}
+        >
+          {p.name}
+          {(p.price || p.less) && (
+            <> — {p.price && <>Price {p.price}</>}
+            {p.price && p.less && ' / '}
+            {p.less && <>Less {p.less}</>}
+            </>
+          )}
+        </li>
+      ))}
+    </ul>
+  )}
+</div>
+
         <input placeholder="Qty" value={qty} onChange={e => setQty(e.target.value)} ref={qtyInputRef} />
         <div style={{ display: 'flex', gap: '25px', alignItems: 'center', height: '35px' }}>
           <label><input type="radio" name="unit" value="pk" checked={unit === 'pk'} onChange={() => setUnit('pk')} />Pk</label>

@@ -185,6 +185,47 @@ const EditAddProduct = () => {
     }
   };
 
+
+  const showAlert = (message, type = "error") => {
+  const colors = {
+    success: { border: "#4CAF50", text: "#2e7d32" },
+    error: { border: "#f44336", text: "#b71c1c" },
+    info: { border: "#2196F3", text: "#0d47a1" },
+  };
+
+  const { border, text } = colors[type] || colors.error;
+
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = `
+    <div style="
+      position: fixed; top: 40px; left: 50%; transform: translateX(-50%);
+      background: #ffffff; color: ${text}; padding: 20px 30px;
+      border-radius: 12px; font-family: 'Segoe UI', sans-serif;
+      font-size: 18px; font-weight: 500;
+      border-left: 8px solid ${border};
+      box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+      z-index: 9999; opacity: 0; transition: opacity 0.4s ease;
+      min-width: 350px; text-align: center;
+    ">
+      ${message}
+    </div>
+  `;
+  const box = wrapper.firstElementChild;
+  document.body.appendChild(box);
+
+  // 🔥 Fade in
+  requestAnimationFrame(() => {
+    box.style.opacity = "1";
+  });
+
+  // ⏱ Auto remove after 3 seconds with fade out
+  setTimeout(() => {
+    box.style.opacity = "0";
+    setTimeout(() => box.remove(), 500);
+  }, 3000);
+};
+
+
   const selectCustomer = (n, c) => {
     setCustName(n);
     setCity(c || '');
@@ -259,35 +300,66 @@ const EditAddProduct = () => {
 
 
   const addOrUpdate = () => {
-    if (!custName || !city) return alert('Fill all required fields');
-    if (!productName) return alert('Select valid product');
-    if (!qty && !editing) return alert('Fill all required fields');
-    let finalQty = unit === 'pk' ? (qty ? parseFloat(qty) * parseFloat(selectedProdQty) : 0) : qty ? parseFloat(qty) : 0;
-    const less = lessUnit === '%'
+  // ✅ Only enforce dropdown selection in ADD mode
+  if (!editing) {
+    if (!validProduct) return showAlert('Please select a valid product from the list');
+  }
+
+  if (!custName || !city) return showAlert('Fill all required fields');
+  if (!productName) return showAlert('Select valid product');
+  if (!qty && !editing) return showAlert('Fill all required fields');
+
+  let finalQty =
+    unit === 'pk'
+      ? (qty ? parseFloat(qty) * parseFloat(selectedProdQty) : 0)
+      : qty
+      ? parseFloat(qty)
+      : 0;
+
+  const less =
+    lessUnit === '%'
       ? (lessVal ? `${lessVal} %` : '')
       : lessUnit; // for NET, pair, Full Bill, half Bill
 
-    const newItem = {
-      productName,
-      unit: selectedProdUnit,
-      less,
-      qty: finalQty,
-      weight,
-      price,
-      packQty: selectedProdQty,
-      packet: unit === 'pk' ? qty : '' // ✅ only keep packet if PK, else empty
-    };
-
-
-
-    if (editing) {
-      if (editing.source === 'pending') setPendingOrders(p => p.map((x, i) => i === editing.index ? { ...x, ...newItem } : x));
-      else setCustomers(p => { const e = p[custName], items = [...(e?.items || [])]; items[editing.index] = newItem; return { ...p, [custName]: { ...e, items } }; });
-    } else {
-      setCustomers(p => { const e = p[custName] || { city, timestamp: new Date().toLocaleString(), items: [] }; return { ...p, [custName]: { ...e, items: [...(e.items || []), newItem] } }; });
-    }
-    resetForm();
+  const newItem = {
+    productName,
+    unit: selectedProdUnit,
+    less,
+    qty: finalQty,
+    weight,
+    price,
+    packQty: selectedProdQty,
+    packet: unit === 'pk' ? qty : '' // ✅ only keep packet if PK, else empty
   };
+
+  if (editing) {
+    if (editing.source === 'pending')
+      setPendingOrders(p =>
+        p.map((x, i) => (i === editing.index ? { ...x, ...newItem } : x))
+      );
+    else
+      setCustomers(p => {
+        const e = p[custName],
+          items = [...(e?.items || [])];
+        items[editing.index] = newItem;
+        return { ...p, [custName]: { ...e, items } };
+      });
+  } else {
+    setCustomers(p => {
+      const e = p[custName] || {
+        city,
+        timestamp: new Date().toLocaleString(),
+        items: []
+      };
+      return {
+        ...p,
+        [custName]: { ...e, items: [...(e.items || []), newItem] }
+      };
+    });
+  }
+  resetForm();
+};
+
 
   const resetForm = () => {
     setProductName(''); setUnit('pk'); setLessVal(''); setLessUnit('%'); setQty(''); setWeight(''); setPrice('');
@@ -397,11 +469,11 @@ const EditAddProduct = () => {
         await fetch(`${URL}/pendingOrders/${p.key}.json`, { method: 'DELETE' });
       }
 
-      alert(`Order placed for customer "${c}"`);
+      showAlert(`Order placed for customer "${c}"`);
       resetAllFields();
 
     } catch (err) {
-      alert('Error: ' + err.message);
+      showAlert('Error: ' + err.message);
     }
   };
 
@@ -417,29 +489,39 @@ const EditAddProduct = () => {
   };
 
   const handleEdit = (type, index) => {
-    const item = type === 'pending' ? pendingOrders[index] : customers[custName].items[index];
-    const match = item.productName.match(/\((\d+)\s*pcs\)/i); // case-insensitive match for (number pcs)
-    const packQty = match ? parseInt(match[1]) : item.packQty || 1;
+  const item = type === 'pending'
+    ? pendingOrders[index]
+    : customers[custName].items[index];
 
-    setSelectedProdQty(packQty);
-    setProductName(item.productName);
-    setQty('');
-    setWeight(item.weight || '');
-    setPrice(item.price || '');
-    setLessVal(item.less === 'NET' ? '' : item.less?.replace('%', '').trim() || '');
-    setLessUnit(item.less === 'NET' ? 'NET' : '%');
-    setUnit('pk');
-    setSelectedProdUnit(item.unit || 'pcs');
-    setEditing({ source: type, index });
-    productInputRef.current.focus();
-  };
+  const match = item.productName.match(/\((\d+)\s*pcs\)/i); // case-insensitive match for (number pcs)
+  const packQty = match ? parseInt(match[1]) : item.packQty || 1;
+
+  setSelectedProdQty(packQty);
+  setProductName(item.productName);
+  setQty('');
+  setWeight(item.weight || '');
+  setPrice(item.price || '');
+  setLessVal(
+    item.less === 'NET'
+      ? ''
+      : item.less?.replace('%', '').trim() || ''
+  );
+  setLessUnit(item.less === 'NET' ? 'NET' : '%');
+  setUnit('pk');
+  setSelectedProdUnit(item.unit || 'pcs');
+  setEditing({ source: type, index });
+
+  // ✅ Focus on Qty field instead of Product when editing
+  qtyInputRef.current.focus();
+};
+
 
   const deletePendingItem = async i => {
     const key = pendingOrders[i].key;
     try {
       await fetch(`${URL}/pendingOrders/${key}.json`, { method: 'DELETE' });
       setPendingOrders(p => p.filter((_, x) => x !== i));
-    } catch { alert('Failed to delete pending item'); }
+    } catch { showAlert('Failed to delete pending item'); }
   };
   const removePendingItemUI = i => setPendingOrders(p => p.filter((_, x) => x !== i));
   const deleteNewItem = i => setCustomers(p => { const e = p[custName]; return { ...p, [custName]: { ...e, items: e.items.filter((_, x) => x !== i) } }; });
@@ -468,45 +550,47 @@ const EditAddProduct = () => {
         </div>
         <input placeholder="City" value={city} onChange={e => setCity(e.target.value)} />
         <div className="autocomplete-wrapper" style={{ position: 'relative' }}>
-          <input
+  <input
   placeholder="Product"
   value={productName}
   onChange={e => {
     setProductName(e.target.value);
-    setJustSelectedProduct(false);   // ✅ allow suggestions to show again
+    setJustSelectedProduct(false);   // ✅ reset so dropdown works again
   }}
   onKeyDown={handleProductKeyDown}
   onBlur={handleProductBlur}
   autoComplete="off"
   className={productError ? 'input-error' : ''}
   ref={productInputRef}
+  disabled={!!editing}
 />
 
-          {prodSuggestions.length > 0 && (
-            <ul
-              className="suggestions-dropdown"
-              ref={productListRef}
-              style={{ position: 'absolute', zIndex: 10 }}
-            >
-              {prodSuggestions.map((p, i) => (
-                <li
-                  key={i}
-                  className={i === highlightedProdIndex ? 'highlighted' : ''}
-                  onClick={() => selectProduct(p)}
-                >
-                  {p.name}
-                  {(p.price || p.less) && (
-                    <> — {p.price && <>Price {p.price}</>}
-                      {p.price && p.less && ' / '}
-                      {p.less && <>Less {p.less}</>}
-                    </>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
 
-        </div>
+  {/* ✅ Only show dropdown in Add mode */}
+  {!editing && prodSuggestions.length > 0 && (
+    <ul
+      className="suggestions-dropdown"
+      ref={productListRef}
+      style={{ position: 'absolute', zIndex: 10 }}
+    >
+      {prodSuggestions.map((p, i) => (
+        <li
+          key={i}
+          className={i === highlightedProdIndex ? 'highlighted' : ''}
+          onClick={() => selectProduct(p)}
+        >
+          {p.name}
+          {(p.price || p.less) && (
+            <> — {p.price && <>Price {p.price}</>}
+            {p.price && p.less && ' / '}
+            {p.less && <>Less {p.less}</>}
+            </>
+          )}
+        </li>
+      ))}
+    </ul>
+  )}
+</div>
         <input placeholder="Qty" value={qty} onChange={e => setQty(e.target.value)} ref={qtyInputRef} />
         <div style={{ display: 'flex', gap: '25px', alignItems: 'center', height: '35px' }}>
           <label><input type="radio" name="unit" value="pk" checked={unit === 'pk'} onChange={() => setUnit('pk')} />Pk</label>
@@ -642,7 +726,7 @@ const EditAddProduct = () => {
                   setLoading(true); // start loader
                   try {
                     if (!matchedOrder?.user || !matchedOrder?.orderId) {
-                      alert("No order selected!");
+                      showAlert("No order selected!");
                       return;
                     }
 
@@ -675,9 +759,9 @@ const EditAddProduct = () => {
                     setMatchedOrder((prev) => ({ ...prev, items: updatedItems }));
                     setCustomers((p) => ({ ...p, [custName]: { ...p[custName], items: [] } }));
 
-                    alert("Items added to order!");
+                    showAlert("Items added to order!");
                   } catch (err) {
-                    alert("Error: " + err.message);
+                    showAlert("Error: " + err.message);
                   } finally {
                     setLoading(false); // stop loader
                   }

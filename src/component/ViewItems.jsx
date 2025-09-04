@@ -121,17 +121,56 @@ const handleEdit = (item) => {
   }
 };
 
+const showAlert = (message, type = "error") => {
+  const colors = {
+    success: { border: "#4CAF50", text: "#2e7d32" },
+    error: { border: "#f44336", text: "#b71c1c" },
+    info: { border: "#2196F3", text: "#0d47a1" },
+  };
+
+  const { border, text } = colors[type] || colors.error;
+
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = `
+    <div style="
+      position: fixed; top: 40px; left: 50%; transform: translateX(-50%);
+      background: #ffffff; color: ${text}; padding: 20px 30px;
+      border-radius: 12px; font-family: 'Segoe UI', sans-serif;
+      font-size: 18px; font-weight: 500;
+      border-left: 8px solid ${border};
+      box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+      z-index: 9999; opacity: 0; transition: opacity 0.4s ease;
+      min-width: 350px; text-align: center;
+    ">
+      ${message}
+    </div>
+  `;
+  const box = wrapper.firstElementChild;
+  document.body.appendChild(box);
+
+  // 🔥 Fade in
+  requestAnimationFrame(() => {
+    box.style.opacity = "1";
+  });
+
+  // ⏱ Auto remove after 3 seconds with fade out
+  setTimeout(() => {
+    box.style.opacity = "0";
+    setTimeout(() => box.remove(), 500);
+  }, 3000);
+};
+
 
 
 // Save updated data
 // Save updated data
 const handleSave = async (id) => {
  if (!editField1.trim() || !editField2.trim() || !editField3.trim()) {
-  alert('Fields cannot be empty');
+  showAlert('Fields cannot be empty');
   return;
 }
 if (!/^\+91\d{10}$/.test(editField3)) {
-  alert('Number must be in format +911234567890');
+  showAlert('Number must be in format +911234567890');
   return;
 }
 
