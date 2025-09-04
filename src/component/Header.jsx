@@ -7,12 +7,15 @@ import { FaUserCircle, FaBars, FaTimes } from 'react-icons/fa';
 import { database } from '../firebase/firebase';  // import from singleton
 import { ref, onValue } from 'firebase/database';
 
-const specialUsers = ['ammar bhai', 'huzaifa bhai'];
+const specialUsers = ['ammar bhai', 'huzaifa bhai', 'shop'];
 
 const Header = ({ onLogout }) => {
   const navigate = useNavigate();
   const [userName, setUserName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false); // ✅ add here
+
+  
   
 
   useEffect(() => {
@@ -20,12 +23,54 @@ const Header = ({ onLogout }) => {
 
   // 🚨 Handle Unknown user immediately
   if (!storedUser || storedUser.toLowerCase() === 'unknown') {
-    alert('You are not logged in. Please login first.');
+    if (!isLoggingOut) {
+      // ✅ Custom styled alert (no OK button)
+      const popup = document.createElement("div");
+      popup.innerHTML = `
+        <div id="loginAlert" style="
+          position: fixed; top: 0; left: 0; width: 100%;
+          background: #dc3545; color: white;
+          padding: 14px 0; font-size: 18px; font-weight: 500;
+          text-align: center; z-index: 9999;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+          transform: translateY(-100%);
+          transition: transform 0.4s ease, opacity 0.4s ease;
+          opacity: 0;
+        ">
+          ⚠️ You are not logged in. Please login first.
+        </div>
+      `;
+      document.body.appendChild(popup);
+
+      // Slide down
+      setTimeout(() => {
+        const alertBox = document.getElementById("loginAlert");
+        if (alertBox) {
+          alertBox.style.transform = "translateY(0)";
+          alertBox.style.opacity = "1";
+        }
+      }, 50);
+
+      // Auto-hide after 2s
+      setTimeout(() => {
+        const alertBox = document.getElementById("loginAlert");
+        if (alertBox) {
+          alertBox.style.transform = "translateY(-100%)";
+          alertBox.style.opacity = "0";
+          setTimeout(() => {
+            if (alertBox.parentNode) alertBox.parentNode.remove();
+          }, 400);
+        }
+      }, 2000);
+    }
+
     onLogout();
     sessionStorage.removeItem('currentUser');
     navigate('/');
     return; // stop further checks
   }
+
+
 
   setUserName(storedUser);
 
@@ -67,12 +112,53 @@ const Header = ({ onLogout }) => {
     setMenuOpen(false);
   };
 
-  const handleLogout = () => {
+const handleLogout = () => {
+  // ✅ Create linear toast popup
+  const popup = document.createElement("div");
+  popup.innerHTML = `
+    <div id="logoutToast" style="
+      position: fixed; top: 0; left: 0; width: 100%;
+      background: #28a745; color: white;
+      padding: 14px 0; font-size: 18px; font-weight: 500;
+      text-align: center; z-index: 9999;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      transform: translateY(-100%);
+      transition: transform 0.4s ease, opacity 0.4s ease;
+      opacity: 0;
+    ">
+      ✅ Logging out...
+    </div>
+  `;
+  document.body.appendChild(popup);
+
+  // ✅ Slide down + fade in
+  setTimeout(() => {
+    const toast = document.getElementById("logoutToast");
+    if (toast) {
+      toast.style.transform = "translateY(0)";
+      toast.style.opacity = "1";
+    }
+  }, 50);
+
+  // ✅ Wait, then logout + slide up
+  setTimeout(() => {
+    setIsLoggingOut(true);
     onLogout();
     setMenuOpen(false);
-    sessionStorage.removeItem('currentUser');
-    navigate('/');
-  };
+    sessionStorage.removeItem("currentUser");
+    navigate("/");
+
+    const toast = document.getElementById("logoutToast");
+    if (toast) {
+      toast.style.transform = "translateY(-100%)";
+      toast.style.opacity = "0";
+      setTimeout(() => {
+        if (toast.parentNode) toast.parentNode.remove();
+      }, 400);
+    }
+  }, 1500); // visible for 1.5s
+};
+
 
   return (
     <>

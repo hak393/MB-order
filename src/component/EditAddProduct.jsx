@@ -468,7 +468,20 @@ const EditAddProduct = () => {
         </div>
         <input placeholder="City" value={city} onChange={e => setCity(e.target.value)} />
         <div className="autocomplete-wrapper" style={{ position: 'relative' }}>
-          <input placeholder="Product" value={productName} onChange={e => setProductName(e.target.value)} onKeyDown={handleProductKeyDown} onBlur={handleProductBlur} autoComplete="off" className={productError ? 'input-error' : ''} ref={productInputRef} />
+          <input
+  placeholder="Product"
+  value={productName}
+  onChange={e => {
+    setProductName(e.target.value);
+    setJustSelectedProduct(false);   // ✅ allow suggestions to show again
+  }}
+  onKeyDown={handleProductKeyDown}
+  onBlur={handleProductBlur}
+  autoComplete="off"
+  className={productError ? 'input-error' : ''}
+  ref={productInputRef}
+/>
+
           {prodSuggestions.length > 0 && (
             <ul
               className="suggestions-dropdown"

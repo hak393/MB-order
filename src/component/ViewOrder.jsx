@@ -28,8 +28,8 @@ const ViewOrder = () => {
   const [editedItem, setEditedItem] = useState(null);
 
   const navigate = useNavigate();
-  const isAuthorizedUser = name => ['huzaifa bhai', 'ammar bhai'].includes(name.toLowerCase());
-  const isAuthorizedAdd = name => ['huzaifa bhai', 'ammar bhai'].includes(name.toLowerCase());
+  const isAuthorizedUser = name => ['huzaifa bhai', 'ammar bhai', 'shop'].includes(name.toLowerCase());
+  const isAuthorizedAdd = name => ['huzaifa bhai', 'ammar bhai', 'shop'].includes(name.toLowerCase());
 
 
 
@@ -60,6 +60,7 @@ const ViewOrder = () => {
       flat.sort((a, b) => new Date(b.orderData.timestamp) + new Date(a.orderData.timestamp));
       setOrders(flat);
     });
+    
 
     // ✅ fetch transport name if editing an order
     const fetchTransportName = async () => {
@@ -115,29 +116,71 @@ const ViewOrder = () => {
 
     setShowModal(true);
   };
+
+
+  // 🚨 Add this helper at the top of ViewOrder.jsx
+const showAlert = (message, type = "error") => {
+  const colors = {
+    success: { border: "#4CAF50", text: "#2e7d32" },
+    error: { border: "#f44336", text: "#b71c1c" },
+    info: { border: "#2196F3", text: "#0d47a1" },
+  };
+
+  const { border, text } = colors[type] || colors.error;
+
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = `
+    <div style="
+      position: fixed; top: 40px; left: 50%; transform: translateX(-50%);
+      background: #ffffff; color: ${text}; padding: 20px 30px;
+      border-radius: 12px; font-family: 'Segoe UI', sans-serif;
+      font-size: 18px; font-weight: 500;
+      border-left: 8px solid ${border};
+      box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+      z-index: 9999; opacity: 0; transition: opacity 0.4s ease;
+      min-width: 350px; text-align: center;
+    ">
+      ${message}
+    </div>
+  `;
+  const box = wrapper.firstElementChild;
+  document.body.appendChild(box);
+
+  // 🔥 Fade in
+  requestAnimationFrame(() => {
+    box.style.opacity = "1";
+  });
+
+  // ⏱ Auto remove after 3 seconds with fade out
+  setTimeout(() => {
+    box.style.opacity = "0";
+    setTimeout(() => box.remove(), 500);
+  }, 3000);
+};
+
   // Replace saveEdit function with this updated version:
 
   const saveEdit = async () => {
-    const { user, customerName, city, items, orderId } = editOrderData;
+  const { user, customerName, city, items, orderId } = editOrderData;
 
-    if (!transportName.trim()) {
-      return alert("Transport Name is required.");
+  if (!transportName.trim()) {
+    return showAlert("Transport Name is required.", "error");
+  }
+
+  for (const i of items) {
+    if (i.sellQty === "" || i.sellQty === null || i.sellQty === undefined) {
+      return showAlert("Sell Qty is required for all items.", "error");
     }
 
-    for (const i of items) {
-  if (i.sellQty === "" || i.sellQty === null || i.sellQty === undefined) {
-    return alert("Sell Qty is required for all items.");
-  }
+    const sell = +i.sellQty;
+    if (isNaN(sell) || sell < 0) {
+      return showAlert("Please enter valid Sell Qty for all items.", "error");
+    }
 
-  const sell = +i.sellQty;
-  if (isNaN(sell) || sell < 0) {
-    return alert("Please enter valid Sell Qty for all items.");
+    if (!i.price || !i.less) {
+      return showAlert("Price and Less fields are required for all items.", "error");
+    }
   }
-
-  if (!i.price || !i.less) {
-    return alert("Price and Less fields are required for all items.");
-  }
-}
 
 
     // ✅ Split items: >0 goes to sellOrders, =0 goes to pendingOrders
@@ -399,7 +442,35 @@ const ViewOrder = () => {
     }, { onlyOnce: true });
   };
   const deleteRow = async (user, orderId, idx) => {
-    if (!window.confirm('Are you sure you want to delete this item?')) return;
+  const confirmBox = document.createElement("div");
+  confirmBox.innerHTML = `
+    <div style="
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6); display: flex;
+      align-items: center; justify-content: center; z-index: 9999;
+    ">
+      <div style="
+        background: white; padding: 20px; border-radius: 10px;
+        text-align: center; width: 300px; font-family: Arial;
+      ">
+        <p style="margin-bottom: 20px; font-size: 16px; color: #333;">
+          Are you sure you want to delete this item?
+        </p>
+        <button id="confirmYes" style="
+          background: red; color: white; padding: 6px 12px;
+          border: none; border-radius: 5px; margin-right: 10px;
+          cursor: pointer;
+        ">Yes</button>
+        <button id="confirmNo" style="
+          background: gray; color: white; padding: 6px 12px;
+          border: none; border-radius: 5px; cursor: pointer;
+        ">No</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(confirmBox);
+
+  document.getElementById("confirmYes").onclick = async () => {
     const orderRef = ref(db, `orders/${user}/${orderId}`);
     const itemsRef = ref(db, `orders/${user}/${orderId}/items`);
     onValue(itemsRef, async snap => {
@@ -407,15 +478,12 @@ const ViewOrder = () => {
       if (Array.isArray(dbItems)) {
         dbItems.splice(idx, 1);
         if (!dbItems.length) {
-          // check if pendingOrderRows still exist
           const pendingSnap = await get(ref(db, `orders/${user}/${orderId}/pendingOrderRows`));
           const pending = pendingSnap.val();
           if (!pending || !pending.length) {
-            // ✅ remove order only if no items AND no pending rows
             await remove(orderRef);
             setOrders(p => p.filter(o => !(o.user === user && o.key === `${user}_${orderId}`)));
           } else {
-            // ✅ keep order since pending rows exist
             await set(itemsRef, []);
             setOrders(p => p.map(o =>
               o.key === `${user}_${orderId}`
@@ -433,7 +501,14 @@ const ViewOrder = () => {
         }
       }
     }, { onlyOnce: true });
+    document.body.removeChild(confirmBox);
   };
+
+  document.getElementById("confirmNo").onclick = () => {
+    document.body.removeChild(confirmBox);
+  };
+};
+
   // --- New: Edit and Delete for pendingOrderRows ---
   const startEditPendingRow = (orderKey, item, rowIndex) => {
     setEditingRow({ orderKey, rowIndex, isPending: true });
@@ -474,7 +549,35 @@ const ViewOrder = () => {
     }, { onlyOnce: true });
   };
   const deletePendingRow = async (user, orderId, idx) => {
-    if (!window.confirm('Are you sure you want to delete this pending item?')) return;
+  const confirmBox = document.createElement("div");
+  confirmBox.innerHTML = `
+    <div style="
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6); display: flex;
+      align-items: center; justify-content: center; z-index: 9999;
+    ">
+      <div style="
+        background: white; padding: 20px; border-radius: 10px;
+        text-align: center; width: 300px; font-family: Arial;
+      ">
+        <p style="margin-bottom: 20px; font-size: 16px; color: #333;">
+          Are you sure you want to delete this pending item?
+        </p>
+        <button id="confirmYes" style="
+          background: red; color: white; padding: 6px 12px;
+          border: none; border-radius: 5px; margin-right: 10px;
+          cursor: pointer;
+        ">Yes</button>
+        <button id="confirmNo" style="
+          background: gray; color: white; padding: 6px 12px;
+          border: none; border-radius: 5px; cursor: pointer;
+        ">No</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(confirmBox);
+
+  document.getElementById("confirmYes").onclick = async () => {
     const orderRef = ref(db, `orders/${user}/${orderId}`);
     const pendingRef = ref(db, `orders/${user}/${orderId}/pendingOrderRows`);
     onValue(pendingRef, async snap => {
@@ -482,15 +585,12 @@ const ViewOrder = () => {
       if (Array.isArray(pendingItems)) {
         pendingItems.splice(idx, 1);
         if (!pendingItems.length) {
-          // check if normal items still exist
           const itemsSnap = await get(ref(db, `orders/${user}/${orderId}/items`));
           const items = itemsSnap.val();
           if (!items || !items.length) {
-            // ✅ remove order only if no items AND no pending rows
             await remove(orderRef);
             setOrders(p => p.filter(o => !(o.user === user && o.key === `${user}_${orderId}`)));
           } else {
-            // ✅ keep order since items exist
             await set(pendingRef, []);
             setOrders(p => p.map(o =>
               o.key === `${user}_${orderId}`
@@ -508,7 +608,14 @@ const ViewOrder = () => {
         }
       }
     }, { onlyOnce: true });
+    document.body.removeChild(confirmBox);
   };
+
+  document.getElementById("confirmNo").onclick = () => {
+    document.body.removeChild(confirmBox);
+  };
+};
+
   const previewAndPrint = ({ user, customerName, orderData, orderId }) => {
     const w = window.open('', '_blank', 'width=800,height=600');
     const combinedRows = [
@@ -553,8 +660,8 @@ const ViewOrder = () => {
             font-weight: bold;
             font-style: italic;
             text-transform: uppercase;
-            background-color: #f9f9f9;
-            border-top: 2px solid #ccc;
+            background-color: #000000ff;
+            border-top: 2px solid #000000ff;
           }
           .page-number:after {
             counter-increment: page;

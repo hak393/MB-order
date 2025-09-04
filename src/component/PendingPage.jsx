@@ -78,6 +78,37 @@ const PendingPage = () => {
   };
 
   const handleDelete = (orderId, key) => {
+  // ✅ Custom styled confirmation popup
+  const confirmBox = document.createElement("div");
+  confirmBox.innerHTML = `
+    <div style="
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6); display: flex;
+      align-items: center; justify-content: center; z-index: 9999;
+    ">
+      <div style="
+        background: white; padding: 20px; border-radius: 10px;
+        text-align: center; width: 300px; font-family: Arial;
+      ">
+        <p style="margin-bottom: 20px; font-size: 16px; color: #333;">
+          Are you sure you want to delete this pending order?
+        </p>
+        <button id="confirmYes" style="
+          background: red; color: white; padding: 6px 12px;
+          border: none; border-radius: 5px; margin-right: 10px;
+          cursor: pointer;
+        ">Yes</button>
+        <button id="confirmNo" style="
+          background: gray; color: white; padding: 6px 12px;
+          border: none; border-radius: 5px; cursor: pointer;
+        ">No</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(confirmBox);
+
+  // ✅ Handle YES click
+  document.getElementById("confirmYes").onclick = () => {
     const orderRef = ref(database, `pendingOrders/${orderId}`);
     remove(orderRef);
 
@@ -90,7 +121,16 @@ const PendingPage = () => {
     }
 
     setGroupedOrders(updatedGroupedOrders);
+
+    document.body.removeChild(confirmBox);
   };
+
+  // ✅ Handle NO click
+  document.getElementById("confirmNo").onclick = () => {
+    document.body.removeChild(confirmBox);
+  };
+};
+
 
   const keysToDisplay = selectedKey ? [selectedKey] : Object.keys(groupedOrders);
 

@@ -134,9 +134,47 @@ const OrderPage = () => {
   }
 }, [productName]);
 
+// ✅ Helper function to show styled alert
+// ✅ Styled popup without OK button
+// ✅ Styled popup without OK button (auto-dismiss)
+const showAlert = (message, type = "error") => {
+  const colors = {
+    success: { border: "#4CAF50", text: "#2e7d32" },
+    error: { border: "#f44336", text: "#b71c1c" },
+    info: { border: "#2196F3", text: "#0d47a1" },
+  };
 
+  const { border, text } = colors[type] || colors.error;
 
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = `
+    <div style="
+      position: fixed; top: 40px; left: 50%; transform: translateX(-50%);
+      background: #ffffff; color: ${text}; padding: 20px 30px;
+      border-radius: 12px; font-family: 'Segoe UI', sans-serif;
+      font-size: 18px; font-weight: 500;
+      border-left: 8px solid ${border};
+      box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+      z-index: 9999; opacity: 0; transition: opacity 0.4s ease;
+      min-width: 350px; text-align: center;
+    ">
+      ${message}
+    </div>
+  `;
+  const box = wrapper.firstElementChild;
+  document.body.appendChild(box);
 
+  // 🔥 Fade in
+  requestAnimationFrame(() => {
+    box.style.opacity = "1";
+  });
+
+  // ⏱ Auto remove after 3 seconds with fade out
+  setTimeout(() => {
+    box.style.opacity = "0";
+    setTimeout(() => box.remove(), 500);
+  }, 3000);
+};
 
   const selectCustomer = (n, c) => {
     setCustName(n);
@@ -209,9 +247,9 @@ const OrderPage = () => {
   };
 
   const addOrUpdate = () => {
-    if (!custName || !city) return alert('Fill all required fields');
-    if (!productName) return alert('Select valid product');
-    if (!qty && !editing) return alert('Fill all required fields');
+if (!custName || !city) return showAlert('Fill all required fields');
+if (!productName) return showAlert('Select valid product');
+if (!qty && !editing) return showAlert('Fill all required fields');
     let finalQty = unit === 'pk' ? (qty ? parseFloat(qty) * parseFloat(selectedProdQty) : 0) : qty ? parseFloat(qty) : 0;
     const less = lessUnit === '%'
       ? (lessVal ? `${lessVal} %` : '')
@@ -345,11 +383,12 @@ const OrderPage = () => {
         await fetch(`${URL}/pendingOrders/${p.key}.json`, { method: 'DELETE' });
       }
 
-      alert(`Order placed for customer "${c}"`);
+      
+showAlert(`Order placed for customer "${c}"`);
       resetAllFields();
 
     } catch (err) {
-    alert('Error: ' + err.message);
+    showAlert('Error: ' + err.message);
   } finally {
     setLoading(false); // stop loader
   }
