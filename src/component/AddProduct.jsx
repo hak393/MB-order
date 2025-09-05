@@ -196,7 +196,6 @@ const isDuplicate = productsList.some(
   >
     <option value="pcs">pcs</option>
     <option value="pk">pk</option>
-    <option value="case">case</option>
     <option value="pair">pair</option>
     <option value="set">set</option>
     <option value="grs">grs</option>
