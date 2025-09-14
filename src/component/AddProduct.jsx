@@ -29,62 +29,84 @@ const AddProduct = () => {
 
   // Fetch existing products
   useEffect(() => {
-  const productsRef = ref(database, 'products');
-  return onValue(productsRef, snapshot => {
-    const data = snapshot.val();
-    const products = data
-      ? Object.values(data).map(p => ({ name: p.name }))
-      : [];
-    setProductsList(products);
-  });
-}, []);
-
+    const productsRef = ref(database, 'products');
+    return onValue(productsRef, snapshot => {
+      const data = snapshot.val();
+      const products = data
+        ? Object.values(data).map(p => ({ name: p.name }))
+        : [];
+      setProductsList(products);
+    });
+  }, []);
 
   // Normalize string: remove spaces & lowercase
   const normalize = str => str.replace(/\s+/g, '').toLowerCase();
 
+  // Capitalize first letter after space
+  const toTitleCase = (str) =>
+    str.replace(/\b\w/g, (char) => char.toUpperCase());
+
+  // Move focus to next field when pressing Enter
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const form = e.target.form;
+      const index = Array.prototype.indexOf.call(form, e.target);
+      form.elements[index + 1]?.focus();
+    }
+  };
+
   // Add customer
+    // Add customer
   const handleAddCustomer = () => {
     if (!customerName.trim() || !city.trim() || !customerNumber.trim()) {
       setPopup({ show: true, message: 'Please enter customer name, city, and number!' });
       return;
     }
 
+    // ✅ Apply TitleCase for Customer Name and City
+    const formattedCustomer = toTitleCase(customerName.trim());
+    const formattedCity = toTitleCase(city.trim());
+
     push(ref(database, 'customers'), {
-      name: customerName.trim(),
-      city: city.trim(),
+      name: formattedCustomer,
+      city: formattedCity,
       number: customerNumber.trim(),
     });
 
-    setPopup({ show: true, message: `Customer "${customerName}" (${city}, ${customerNumber}) added! ✅` });
-    setCustomerName(''); setCity(''); setCustomerNumber('');
+    setPopup({ show: true, message: `Customer "${formattedCustomer}" (${formattedCity}, ${customerNumber}) added! ✅` });
+    setCustomerName('');
+    setCity('');
+    setCustomerNumber('');
   };
 
+
   // Add product
-  // Add product
-const handleAddProduct = () => {
-  if (!productName.trim() || !productQty.trim()) {
-    setPopup({ show: true, message: 'Please enter product name and quantity!' });
-    return;
-  }
-  if (isNaN(productQty) || Number(productQty) <= 0) {
-    setPopup({ show: true, message: 'Please enter a valid quantity!' });
-    return;
-  }
+  const handleAddProduct = () => {
+    if (!productName.trim() || !productQty.trim()) {
+      setPopup({ show: true, message: 'Please enter product name and quantity!' });
+      return;
+    }
+    if (isNaN(productQty) || Number(productQty) <= 0) {
+      setPopup({ show: true, message: 'Please enter a valid quantity!' });
+      return;
+    }
 
-  // Combine everything into one line: "ProductName (Qty Unit)"
-  const finalName = `${productName.trim()} (${productQty} ${unit})`;
+    // ✅ Capitalize first letter of each word in product name
+    const formattedName = toTitleCase(productName.trim());
 
-  push(ref(database, 'products'), {
-    name: finalName
-  });
+    // Combine everything into one line: "ProductName (Qty Unit)"
+    const finalName = `${formattedName} (${productQty} ${unit})`;
 
-  setPopup({ show: true, message: `Product "${finalName}" added! ✅` });
-  setProductName('');
-  setProductQty('');
-  setUnit('pcs');
-};
+    push(ref(database, 'products'), {
+      name: finalName
+    });
 
+    setPopup({ show: true, message: `Product "${finalName}" added! ✅` });
+    setProductName('');
+    setProductQty('');
+    setUnit('pcs');
+  };
 
   // Filter products for display ignoring spaces
   const filteredProducts = productsList.filter(p =>
@@ -93,10 +115,9 @@ const handleAddProduct = () => {
 
   // Check if product with same name and qty exists ignoring spaces
   const finalName = `${productName.trim()} (${productQty} ${unit})`;
-const isDuplicate = productsList.some(
-  p => normalize(p.name) === normalize(finalName)
-);
-
+  const isDuplicate = productsList.some(
+    p => normalize(p.name) === normalize(finalName)
+  );
 
   return (
     <div className="add-product">
@@ -108,122 +129,149 @@ const isDuplicate = productsList.some(
 
       <h1>Add Data</h1>
 
-      {/* Customer Section */}
-      <div className="section-block">
-        <h3>Add Customer with City and Number</h3>
-        <input
-          type="text"
-          value={customerName}
-          onChange={e => setCustomerName(e.target.value)}
-          placeholder="Enter customer name"
-        /><br />
-        <input
-          type="text"
-          value={city}
-          onChange={e => setCity(e.target.value)}
-          placeholder="Enter city"
-          style={{ marginTop: '10px' }}
-        /><br />
-        <input
-          type="tel"
-          value={customerNumber}
-          onChange={(e) => {
-            let value = e.target.value;
-            if (!value.startsWith('+91')) value = '+91' + value.replace(/\D/g, '');
-            else value = '+91' + value.slice(3).replace(/\D/g, '');
-            if (value.length > 13) value = value.slice(0, 13);
-            setCustomerNumber(value);
-          }}
-          onKeyDown={(e) => {
-            const cursorPos = e.target.selectionStart;
-            if ((cursorPos <= 3) && (e.key === 'Backspace' || e.key === 'Delete')) e.preventDefault();
-          }}
-          placeholder="+91XXXXXXXXXX"
-          style={{ marginTop: '10px' }}
-        /><br />
-        <button className="btn-manual" onClick={handleAddCustomer} style={{ marginTop: '10px' }}>Save Customer</button>
-      </div>
+      {/* Wrap in form to support Enter-as-Tab navigation */}
+      <form>
+        {/* Customer Section */}
+        <div className="section-block">
+          <h3>Add Customer with City and Number</h3>
+          <input
+            type="text"
+            value={customerName}
+            onChange={e => setCustomerName(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Enter customer name"
+          /><br />
+          <input
+            type="text"
+            value={city}
+            onChange={e => setCity(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Enter city"
+            style={{ marginTop: '10px' }}
+          /><br />
+          <input
+            type="tel"
+            value={customerNumber}
+            onChange={(e) => {
+              let value = e.target.value.replace(/\D/g, '');
+              if (value.length > 10) value = value.slice(0, 10);
+              setCustomerNumber(value);
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder="Customer Number"
+            style={{ marginTop: '10px' }}
+          /><br />
 
-      <hr style={{ margin: '30px 0' }} />
-
-      {/* Product Section */}
-      <div className="section-block">
-  <h3>Add Product</h3>
-
-  {/* Product Name Input */}
-  <input
-    type="text"
-    value={productName}
-    onChange={(e) => setProductName(e.target.value)}
-    placeholder="Enter product name"
-  />
-
-  {/* Display matching products with quantity */}
-  {filteredProducts.length > 0 && (
-    <div className="product-dropdown-display">
-      {filteredProducts.map((p, i) => (
-        <div key={i} className="product-item-display">
-          {p.name} - {p.qty}
+          <button
+            type="button"
+            className="btn-manual"
+            onClick={handleAddCustomer}
+            style={{ marginTop: '10px' }}
+          >
+            Save Customer
+          </button>
         </div>
-      ))}
-    </div>
-  )}
 
-  {/* Product Quantity Input */}
-  <input
-    type="number"
-    value={productQty}
-    onChange={(e) => setProductQty(e.target.value.replace(/-/g, ''))}
-    onKeyDown={(e) => {
-      if (e.key === '-') e.preventDefault();
-    }}
-    placeholder="Enter product quantity"
-    style={{ marginTop: '10px' }}
-  />
+        <hr style={{ margin: '30px 0' }} />
 
-  {/* Unit Dropdown */}
-  <select
-    value={unit}
-    onChange={(e) => setUnit(e.target.value)}
-    style={{
-      marginTop: '10px',
-      marginLeft: '10px',
-      padding: '5px 10px',
-      fontSize: '15px',
-      borderRadius: '6px',
-      minWidth: '10px'
-    }}
-  >
-    <option value="pcs">pcs</option>
-    <option value="pk">pk</option>
-    <option value="pair">pair</option>
-    <option value="set">set</option>
-    <option value="grs">grs</option>
-  </select>
+        {/* Product Section */}
+        <div className="section-block">
+          <h3>Add Product</h3>
 
-  <br />
+          {/* Product Name Input */}
+          <input
+            type="text"
+            value={productName}
+            onChange={(e) => setProductName(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Enter product name"
+          />
 
-  {/* Save Product Button */}
-  <button
-    className="btn-manual"
-    onClick={handleAddProduct}
-    style={{
-      marginTop: '10px',
-      backgroundColor: isDuplicate ? '#d3d3d3' : '',
-      cursor: isDuplicate ? 'not-allowed' : 'pointer'
-    }}
-    disabled={isDuplicate} // disable if duplicate
-  >
-    Save Product
-  </button>
+          {/* Display matching products with quantity */}
+          {filteredProducts.length > 0 && (
+            <div className="product-dropdown-display">
+              {filteredProducts.map((p, i) => (
+                <div key={i} className="product-item-display">
+                  {p.name} - {p.qty}
+                </div>
+              ))}
+            </div>
+          )}
 
-  {isDuplicate && (
-    <div style={{ color: 'red', marginTop: '5px' }}>
-      This product with the same quantity already exists!
-    </div>
-  )}
-</div>
+          {/* Product Quantity Input */}
+          <input
+            type="number"
+            value={productQty}
+            onChange={(e) => setProductQty(e.target.value.replace(/-/g, ''))}
+            onKeyDown={(e) => {
+              if (e.key === '-') e.preventDefault();
+              else handleKeyDown(e);
+            }}
+            placeholder="Enter product quantity"
+            style={{ marginTop: '10px' }}
+          />
 
+          {/* Unit Dropdown */}
+          <select
+  value={unit}
+  onChange={(e) => {
+    setUnit(e.target.value);
+    // ✅ Run handleKeyDown after selecting
+    handleKeyDown({
+      key: "Enter",
+      preventDefault: () => {},
+      target: e.target,
+    });
+  }}
+  onClick={(e) => {
+    // ✅ Even if same option is clicked, still run handleKeyDown
+    handleKeyDown({
+      key: "Enter",
+      preventDefault: () => {},
+      target: e.target,
+    });
+  }}
+  style={{
+    marginTop: "10px",
+    marginLeft: "10px",
+    padding: "5px 10px",
+    fontSize: "15px",
+    borderRadius: "6px",
+    minWidth: "10px",
+  }}
+>
+  <option value="pcs">pcs</option>
+  <option value="pk">pk</option>
+  <option value="pair">pair</option>
+  <option value="set">set</option>
+  <option value="grs">grs</option>
+</select>
+
+
+<br />
+
+          {/* Save Product Button */}
+          <button
+            type="button"
+            className="btn-manual"
+            onClick={handleAddProduct}
+            style={{
+              marginTop: '10px',
+              backgroundColor: isDuplicate ? '#d3d3d3' : '',
+              cursor: isDuplicate ? 'not-allowed' : 'pointer'
+            }}
+            disabled={isDuplicate} // disable if duplicate
+          >
+            Save Product
+          </button>
+
+          {isDuplicate && (
+            <div style={{ color: 'red', marginTop: '5px' }}>
+              This product with the same quantity already exists!
+            </div>
+          )}
+        </div>
+      </form>
     </div>
   );
 };

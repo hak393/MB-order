@@ -32,6 +32,7 @@ const EditAddProduct = () => {
     [highlightedProdIndex, setHighlightedProdIndex] = useState(-1);
   const [justSelectedProduct, setJustSelectedProduct] = useState(false);
   const [loading, setLoading] = useState(false);
+    const [kgRate, setKgRate] = useState('');
 
 
   const refDebCust = useRef(null),
@@ -186,6 +187,26 @@ const EditAddProduct = () => {
   };
 
 
+  const handleKeyDown = (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+
+    // ✅ Find all focusable elements inside the page
+    const focusable = Array.from(
+      document.querySelectorAll(
+        'input, select, textarea, button'
+      )
+    ).filter(el => !el.disabled && el.type !== "hidden");
+
+    const index = focusable.indexOf(e.target);
+    if (index >= 0) {
+      focusable[index + 1]?.focus();
+    }
+  }
+};
+
+
+
   const showAlert = (message, type = "error") => {
   const colors = {
     success: { border: "#4CAF50", text: "#2e7d32" },
@@ -328,6 +349,7 @@ const EditAddProduct = () => {
     qty: finalQty,
     weight,
     price,
+    kgRate,   // ✅ keep per-item
     packQty: selectedProdQty,
     packet: unit === 'pk' ? qty : '' // ✅ only keep packet if PK, else empty
   };
@@ -362,7 +384,7 @@ const EditAddProduct = () => {
 
 
   const resetForm = () => {
-    setProductName(''); setUnit('pk'); setLessVal(''); setLessUnit('%'); setQty(''); setWeight(''); setPrice('');
+    setProductName(''); setUnit('pk'); setLessVal(''); setLessUnit('%'); setQty(''); setWeight(''); setPrice(''); setKgRate('');
     setEditing(null); setValidProduct(false); setProductError(false); setSelectedProdQty(1); setSelectedProdUnit('pcs');
     productInputRef.current?.focus();
   };
@@ -416,35 +438,36 @@ const EditAddProduct = () => {
       const newItems = customers[c]?.items || [];
 
       const pendingOrderRows = normalizedPending.map(
-        ({ productName, qty, unit, weight, price, less, packQty, packet }) => ({
-          productName,
-          qty,
-          unit,
-          weight: weight || '',
-          price: price || '',
-          less:
-            (typeof less === 'number' || (typeof less === 'string' && !isNaN(Number(less))))
-              ? `${less}%`
-              : (less || ''),
-          packQty: packQty || '',
-          packet: packet ?? '' // ✅ Store packet value
-        })
-      );
+  ({ productName, qty, unit, weight, price, kgRate, less, packQty, packet }) => ({
+    productName,
+    qty,
+    unit,
+    weight: weight || '',
+    price: price || '',
+    kgRate: kgRate || '',   // ✅ take from item
+    less:
+      (typeof less === 'number' || (typeof less === 'string' && !isNaN(Number(less))))
+        ? `${less}%`
+        : (less || ''),
+    packQty: packQty || '',
+    packet: packet ?? ''
+  })
+);
 
+const items = newItems.map(
+  ({ productName, qty, unit, weight, price, kgRate, less, packQty, packet }) => ({
+    productName,
+    qty,
+    unit,
+    weight: weight || '',
+    price: price || '',
+    kgRate: kgRate || '',   // ✅ take from item
+    less: less || '',
+    packQty: packQty || '',
+    packet: packet ?? ''
+  })
+);
 
-
-      const items = newItems.map(
-        ({ productName, qty, unit, weight, price, less, packQty, packet }) => ({
-          productName,
-          qty,
-          unit,
-          weight: weight || '',
-          price: price || '',
-          less: less || '',
-          packQty: packQty || '',
-          packet: packet ?? '' // ✅ Store packet value
-        })
-      );
 
 
       // 3️⃣ Merge data with just-created entry
@@ -489,32 +512,25 @@ const EditAddProduct = () => {
   };
 
   const handleEdit = (type, index) => {
-  const item = type === 'pending'
-    ? pendingOrders[index]
-    : customers[custName].items[index];
-
-  const match = item.productName.match(/\((\d+)\s*pcs\)/i); // case-insensitive match for (number pcs)
+  const item = type === 'pending' ? pendingOrders[index] : customers[custName].items[index];
+  const match = item.productName.match(/\((\d+)\s*pcs\)/i);
   const packQty = match ? parseInt(match[1]) : item.packQty || 1;
 
   setSelectedProdQty(packQty);
   setProductName(item.productName);
-  setQty('');
+  setQty(item.packet || item.qty || '');
   setWeight(item.weight || '');
   setPrice(item.price || '');
-  setLessVal(
-    item.less === 'NET'
-      ? ''
-      : item.less?.replace('%', '').trim() || ''
-  );
+  setKgRate(item.kgRate || '');   // ✅ put kgRate into input field
+  setLessVal(item.less === 'NET' ? '' : item.less?.replace('%', '').trim() || '');
   setLessUnit(item.less === 'NET' ? 'NET' : '%');
   setUnit('pk');
   setSelectedProdUnit(item.unit || 'pcs');
   setEditing({ source: type, index });
 
-  // ✅ Focus on Qty field instead of Product when editing
-  qtyInputRef.current.focus();
+  // 🔥 FIX: focus directly on Qty input instead of Product
+  qtyInputRef.current?.focus();
 };
-
 
   const deletePendingItem = async i => {
     const key = pendingOrders[i].key;
@@ -591,32 +607,90 @@ const EditAddProduct = () => {
     </ul>
   )}
 </div>
-        <input placeholder="Qty" value={qty} onChange={e => setQty(e.target.value)} ref={qtyInputRef} />
-        <div style={{ display: 'flex', gap: '25px', alignItems: 'center', height: '35px' }}>
-          <label><input type="radio" name="unit" value="pk" checked={unit === 'pk'} onChange={() => setUnit('pk')} />Pk</label>
-          <label><input type="radio" name="unit" value="loose" checked={unit === 'loose'} onChange={() => setUnit('loose')} />Loose</label>
-        </div>
-        <input placeholder="Price" value={price} onChange={e => setPrice(e.target.value)} />
-        <input placeholder="Weight" value={weight} onChange={e => setWeight(e.target.value)} />
         <input
-          placeholder="Less Value"
-          value={lessVal}
-          onChange={e => setLessVal(e.target.value)}
-          disabled={lessUnit !== '%'}
-          style={{
-            backgroundColor: lessUnit !== '%' ? '#e0e0e0' : 'white',
-            color: lessUnit !== '%' ? '#7a7a7a' : 'black',
-            cursor: lessUnit !== '%' ? 'not-allowed' : 'text'
-          }}
-        />
+  placeholder="Qty"
+  value={qty}
+  onChange={e => setQty(e.target.value)}
+  ref={qtyInputRef}
+  onKeyDown={handleKeyDown}   // ✅ added
+/>
 
-        <select value={lessUnit} onChange={e => setLessUnit(e.target.value)}>
-          <option value="%">%</option>
-          <option value="NET">NET</option>
-          <option value="pair">Pair</option>
-          <option value="Full Bill">Full Bill</option>
-          <option value="half Bill">Half Bill</option>
-        </select>
+<div style={{ display: 'flex', gap: '25px', alignItems: 'center', height: '35px' }}>
+  <label>
+    <input
+      type="radio"
+      name="unit"
+      value="pk"
+      checked={unit === 'pk'}
+      onChange={() => setUnit('pk')}
+      onKeyDown={handleKeyDown}   // ✅ added
+    />
+    Pk
+  </label>
+  <label>
+    <input
+      type="radio"
+      name="unit"
+      value="loose"
+      checked={unit === 'loose'}
+      onChange={() => setUnit('loose')}
+      onKeyDown={handleKeyDown}   // ✅ added
+    />
+    Loose
+  </label>
+</div>
+
+<input
+  placeholder="Price"
+  value={price}
+  onChange={e => setPrice(e.target.value)}
+  onKeyDown={handleKeyDown}   // ✅ added
+/>
+
+<input
+  placeholder="KG Rate"
+  value={kgRate}
+  onChange={e => setKgRate(e.target.value)}
+  onKeyDown={handleKeyDown}
+/>
+
+{/* <input
+  placeholder="Weight"
+  value={weight}
+  onChange={e => setWeight(e.target.value)}
+  onKeyDown={handleKeyDown}   // ✅ added
+/> */}
+
+<input
+  placeholder="Less Value"
+  value={lessVal}
+  onChange={e => setLessVal(e.target.value)}
+  disabled={lessUnit !== '%'}
+  style={{
+    backgroundColor: lessUnit !== '%' ? '#e0e0e0' : 'white',
+    color: lessUnit !== '%' ? '#7a7a7a' : 'black',
+    cursor: lessUnit !== '%' ? 'not-allowed' : 'text'
+  }}
+  onKeyDown={handleKeyDown}   // ✅ added
+/>
+
+<select
+  value={lessUnit}
+  onChange={e => {
+    setLessUnit(e.target.value);
+    handleKeyDown({ key: "Enter", preventDefault: () => {}, target: e.target });
+  }}
+  onClick={e => {
+    // ✅ even if same option is clicked, still trigger
+    handleKeyDown({ key: "Enter", preventDefault: () => {}, target: e.target });
+  }}
+>
+  <option value="%">%</option>
+  <option value="NET">NET</option>
+  <option value="pair">Pair</option>
+  <option value="Full Bill">Full Bill</option>
+  <option value="half Bill">Half Bill</option>
+</select>
 
 
 
@@ -634,88 +708,84 @@ const EditAddProduct = () => {
             <div className="table-wrapper">
               <table className="order-table">
                 <thead>
-                  <tr>
-                    <th>Sr No</th>
-                    <th>Product</th>
-                    <th>Qty</th>
-                    <th>Weight</th>
-                    <th>Price</th>
-                    <th>Less</th>
-                    <th>Packet</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
+  <tr>
+    <th>Sr No</th>
+    <th>Product</th>
+    <th>Qty</th>
+    {/* <th>Weight</th>  ✅ hidden */}
+    <th>KG Rate</th>   {/* ✅ new column */}
+    <th>Price</th>
+    <th>Less</th>
+    <th>Packet</th>
+    <th>Actions</th>
+  </tr>
+</thead>
                 <tbody>
+  {/* fetched pendingOrderRows */}
+  {matchedOrder.pendingOrderRows?.map((item, i) => (
+    <tr key={`pendingRow-${i}`} className="pending-row">
+      <td>{(matchedOrder.items?.length || 0) + i + 1}</td>
+      <td>{item.productName}</td>
+      <td>{`${item.qty} ${item.unit}`}</td>
+      <td>{item.kgRate || '-'}</td>   {/* ✅ KG Rate */}
+      <td>₹{item.price}</td>
+      <td>{item.less || '-'}</td>
+      <td>{item.packet ?? '-'}</td>
+      <td>-</td>
+    </tr>
+  ))}
 
-                  {/* fetched items with actions */}
-                  {/* pendingOrderRows fetched from DB */}
-                  {matchedOrder.pendingOrderRows?.map((item, i) => (
-                    <tr key={`pendingRow-${i}`} className="pending-row">
-                      <td>{(matchedOrder.items?.length || 0) + i + 1}</td>
-                      <td>{item.productName}</td>
-                      <td>{`${item.qty} ${item.unit}`}</td>
-                      <td>{item.weight || '-'}</td>
-                      <td>₹{item.price}</td>
-                      <td>{item.less || '-'}</td>
-                      <td>{item.packet ?? '-'}</td>
-                      <td>{'-'}</td>
-                    </tr>
-                  ))}
+  {/* matched order items */}
+  {matchedOrder.items?.map((item, i) => (
+    <tr key={i}>
+      <td>{i + 1}</td>
+      <td>{item.productName}</td>
+      <td>{`${item.qty} ${item.unit}`}</td>
+      <td>{item.kgRate || '-'}</td>   {/* ✅ KG Rate */}
+      <td>₹{item.price}</td>
+      <td>{item.less || '-'}</td>
+      <td>{item.packet || '-'}</td>
+      <td>-</td>
+    </tr>
+  ))}
 
-                  {matchedOrder.items?.map((item, i) => (
-                    <tr key={i}>
-                      <td>{i + 1}</td>
-                      <td>{item.productName}</td>
-                      <td>{`${item.qty} ${item.unit}`}</td>
-                      <td>{item.weight || '-'}</td>
-                      <td>₹{item.price}</td>
-                      <td>{item.less || '-'}</td>
-                      <td>{item.packet || '-'}</td>
-                      <td>{'-'}</td>
-                    </tr>
-                  ))}
+  {/* pending items (editable) */}
+  {pendingOrders.map((item, i) => (
+    <tr key={i} className="pending-row">
+      <td>{i + 1}</td>
+      <td>{item.productName}</td>
+      <td>{`${item.qty ?? item.remainingQty} ${item.unit}`}</td>
+      <td>{item.kgRate || '-'}</td>   {/* ✅ KG Rate */}
+      <td>₹{item.price}</td>
+      <td>{item.less ? (item.less.endsWith('%') ? item.less : item.less) : '-'}</td>
+      <td>{item.packet ?? '-'}</td>
+      <td>
+        <button onClick={() => handleEdit('pending', i)}>Edit</button>
+        <button onClick={() => deletePendingItem(i)}>Delete</button>
+        <button onClick={() => removePendingItemUI(i)}>Remove</button>
+      </td>
+    </tr>
+  ))}
 
+  {/* new items */}
+    {/* new items */}
+  {newItemsList.map((item, i) => (
+    <tr key={`new-${i}`}>
+      <td>{pendingOrders.length + i + 1}</td>
+      <td>{item.productName}</td>
+      <td>{`${item.qty} ${item.unit}`}</td>
+      <td>{item.kgRate || '-'}</td>   {/* ✅ KG Rate */}
+      <td>₹{item.price}</td>
+      <td>{item.less || '-'}</td>
+      <td>{item.packet || '-'}</td>
+      <td>
+        <button onClick={() => handleEdit('new', i)}>Edit</button>
+        <button onClick={() => deleteNewItem(i)}>Delete</button>
+      </td>
+    </tr>
+  ))}
 
-                  {/* pending items with actions */}
-                  {pendingOrders.map((item, i) => (
-                    <tr key={i} className="pending-row">
-                      <td>{i + 1}</td>
-                      <td>{item.productName}</td>
-                      <td>{`${item.qty ?? item.remainingQty} ${item.unit}`}</td>
-                      <td>{item.weight || '-'}</td>
-                      <td>₹{item.price}</td>
-                      <td>
-                        {item.less
-                          ? (item.less.endsWith('%') ? item.less : item.less)
-                          : '-'}
-                      </td>
-                      <td>{item.packet ?? '-'}</td>
-                      <td>
-                        <button onClick={() => handleEdit('pending', i)}>Edit</button>
-                        <button onClick={() => deletePendingItem(i)}>Delete</button>
-                        <button onClick={() => removePendingItemUI(i)}>Remove</button>
-                      </td>
-                    </tr>
-                  ))}
-
-                  {/* new items with actions */}
-                  {newItemsList.map((item, i) => (
-                    <tr key={`new-${i}`}>
-                      <td>{pendingOrders.length + i + 1}</td>
-                      <td>{item.productName}</td>
-                      <td>{`${item.qty} ${item.unit}`}</td>
-                      <td>{item.weight || '-'}</td>
-                      <td>₹{item.price}</td>
-                      <td>{item.less || '-'}</td>
-                      <td>{item.packet ?? '-'}</td>
-                      <td>
-                        <button onClick={() => handleEdit('new', i)}>Edit</button>
-                        <button onClick={() => deleteNewItem(i)}>Delete</button>
-                      </td>
-                    </tr>
-                  ))}
-
-                </tbody>
+</tbody>
               </table>
             </div>
           </div>
@@ -731,11 +801,12 @@ const EditAddProduct = () => {
                     }
 
                     const items = newItemsList.map(
-                      ({ productName, qty, unit, weight, price, less, packQty, packet }) => ({
+                      ({ productName, qty, unit, weight, price, kgRate, less, packQty, packet }) => ({
                         productName,
                         qty,
                         unit,
                         weight: weight || '',
+                        kgRate: kgRate || '',  // ✅ take from item
                         price: price || '',
                         less: less || '',
                         packQty: packQty || '',

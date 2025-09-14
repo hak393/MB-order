@@ -18,8 +18,10 @@ const ViewItems = () => {
 
 
   // Fetch data from Firebase when option changes
-  useEffect(() => {
+  // Fetch data from Firebase when option changes
+useEffect(() => {
   if (selectedOption) {
+    setSearchTerm(""); // ✅ clear search bar on selection change
     setLoading(true);
     const path = selectedOption === 'customer' ? 'customers' : 'products';
     const dataRef = ref(database, path);
@@ -28,22 +30,20 @@ const ViewItems = () => {
       const list = Object.keys(data).map((id) => {
         if (selectedOption === 'customer') {
           return {
-  id,
-  name: data[id].name || 'Unknown',
-  city: data[id].city || '',
-  number: data[id].number || ''   // ✅ add this
-};
-
+            id,
+            name: data[id].name || 'Unknown',
+            city: data[id].city || '',
+            number: data[id].number || ''
+          };
         } else {
           let fullName = data[id].name || 'Unknown';
           let name = fullName;
           let qty = '';
 
-          // ✅ extract qty inside brackets e.g. "railway hinges (6 pcs)"
           const match = fullName.match(/^(.*?)\s*\((.*?)\)$/);
           if (match) {
-            name = match[1].trim();   // railway hinges
-            qty = match[2].trim();    // 6 pcs
+            name = match[1].trim();
+            qty = match[2].trim();
           }
 
           return { id, name, qty };
@@ -62,9 +62,23 @@ const ViewItems = () => {
   } else {
     setCustomers([]);
     setProducts([]);
-    setSearchTerm('');
   }
 }, [selectedOption]);
+
+
+// helper function
+const handleKeyDown = (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault(); // stop form submit
+    const form = e.target.form || document;
+    const index = Array.prototype.indexOf.call(form.querySelectorAll("input"), e.target);
+    const next = form.querySelectorAll("input")[index + 1];
+    if (next) {
+      next.focus();
+    }
+  }
+};
+
 
   // Delete item from Firebase
   const handleDelete = (id) => {
@@ -169,8 +183,8 @@ const handleSave = async (id) => {
   showAlert('Fields cannot be empty');
   return;
 }
-if (!/^\+91\d{10}$/.test(editField3)) {
-  showAlert('Number must be in format +911234567890');
+if (!/^\d{10}$/.test(editField3)) {
+  showAlert('Number must be exactly 10 digits');
   return;
 }
 
@@ -316,132 +330,166 @@ await update(ref(database, `${path}/${id}`), updateData);
       {selectedOption && (
         <div className="data-section" style={{ marginTop: '20px' }}>
           {loading ? (
-            <p>Loading...</p>
-          ) : filteredList.length > 0 ? (
-            <>
-              {/* Search bar */}
-              <input
-                type="text"
-                placeholder={`Search ${selectedOption}...`}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ padding: '5px', marginBottom: '10px', width: '100%' }}
-              />
+  <p>Loading...</p>
+) : (
+  <>
+    {/* ✅ Always show search bar */}
+    <input
+      type="text"
+      placeholder={`Search ${selectedOption}...`}
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+      style={{ padding: '5px', marginBottom: '10px', width: '100%' }}
+    />
 
-              {/* Table */}
-              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
-                <thead>
-                  <tr style={{ background: '#f4f4f4' }}>
-                    <th style={{ border: '1px solid #ccc', padding: '8px' }}>Name</th>
-                    <th style={{ border: '1px solid #ccc', padding: '8px' }}>
-                      {selectedOption === 'customer' ? 'City' : 'Qty'} {/* 🔹 Changed from Price to Qty */}
-                    </th>
-                    {selectedOption === 'customer' && (
-  <th style={{ border: '1px solid #ccc', padding: '8px' }}>Number</th>
-)}
+    {filteredList.length > 0 ? (
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
+        <thead>
+          <tr style={{ background: '#f4f4f4' }}>
+            <th style={{ border: '1px solid #ccc', padding: '8px' }}>Name</th>
+            <th style={{ border: '1px solid #ccc', padding: '8px' }}>
+              {selectedOption === 'customer' ? 'City' : 'Qty'}
+            </th>
+            {selectedOption === 'customer' && (
+              <th style={{ border: '1px solid #ccc', padding: '8px' }}>Number</th>
+            )}
+            <th style={{ border: '1px solid #ccc', padding: '8px' }}>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+  {filteredList.map((item) => (
+    <tr key={item.id}>
+      <td style={{ border: '1px solid #ccc', padding: '8px' }}>
+        {editId === item.id ? (
+          <input
+  type="text"
+  value={editField1}
+  onChange={(e) => setEditField1(e.target.value)}
+  onKeyDown={handleKeyDown}
+  style={{ width: '100%' }}
+  autoFocus   // ✅ ensures Name field is focused when Edit clicked
+/>
 
-                    <th style={{ border: '1px solid #ccc', padding: '8px' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredList.map((item) => (
-                    <tr key={item.id}>
-                      <td style={{ border: '1px solid #ccc', padding: '8px' }}>
-                        {editId === item.id ? (
-                          <input
-                            type="text"
-                            value={editField1}
-                            onChange={(e) => setEditField1(e.target.value)}
-                            style={{ width: '100%' }}
-                          />
-                        ) : (
-                          item.name
-                        )}
-                      </td>
-                      <td style={{ border: '1px solid #ccc', padding: '8px' }}>
-                        {editId === item.id ? (
-                          <input
-                            type="text"
-                            value={editField2}
-                            onChange={(e) => setEditField2(e.target.value)}
-                            style={{ width: '100%' }}
-                          />
-                        ) : selectedOption === 'customer' ? (
-                          item.city
-                        ) : (
-                          item.qty // 🔹 Changed from price to qty
-                        )}
-                      </td>
-                     {selectedOption === 'customer' && (
-  <td style={{ border: '1px solid #ccc', padding: '8px' }}>
-    {editId === item.id ? (
-      <input
-        type="text"
-        value={editField3}
-        onChange={(e) => {
-          let val = e.target.value;
+        ) : (
+          item.name
+        )}
+      </td>
+      <td style={{ border: '1px solid #ccc', padding: '8px' }}>
+        {editId === item.id ? (
+          <input
+  type="text"
+  value={editField2}
+  onChange={(e) => setEditField2(e.target.value)}
+  onKeyDown={(e) => {
+    // Allow Shift+Tab to go backwards normally
+    if (e.key === "Tab" && e.shiftKey) return;
 
-          // ✅ always force +91 prefix
-          if (!val.startsWith('+91')) {
-            val = '+91' + val.replace(/\D/g, '');
-          }
+    if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault();
 
-          // ✅ allow only +91 + 10 digits
-          const digits = val.replace('+91', '').replace(/\D/g, '').slice(0, 10);
-          setEditField3('+91' + digits);
-        }}
-        style={{ width: '100%' }}
-      />
-    ) : (
-      item.number
-    )}
-  </td>
-)}
+      if (selectedOption === "customer") {
+        // 👉 Go to Number column
+        const numberInput = e.target
+          .closest("tr")
+          .querySelector("td:nth-child(3) input"); 
+        if (numberInput) numberInput.focus();
+      } else {
+        // 👉 Product: go directly to Save button
+        const saveBtn = e.target
+          .closest("tr")
+          .querySelector("button:first-of-type");
+        if (saveBtn) saveBtn.focus();
+      }
+    }
+  }}
+  style={{ width: "100%" }}
+/>
 
+        ) : selectedOption === 'customer' ? (
+          item.city
+        ) : (
+          item.qty
+        )}
+      </td>
+      {selectedOption === 'customer' && (
+        <td style={{ border: '1px solid #ccc', padding: '8px' }}>
+          {editId === item.id ? (
+            <input
+  type="text"
+  value={editField3}
+  onChange={(e) => {
+    let val = e.target.value.replace(/\D/g, '');
+    val = val.slice(0, 10);
+    setEditField3(val);
+  }}
+  onKeyDown={(e) => {
+    // If user pressed Shift+Tab, allow default (go backward)
+    if (e.key === "Tab" && e.shiftKey) {
+      return; // do not preventDefault -> browser will move focus backwards
+    }
 
+    if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault();
+      const saveBtn = e.target
+        .closest("tr")
+        .querySelector("button:first-of-type"); // Save button in Action column
+      if (saveBtn) saveBtn.focus();
+    }
+  }}
+  style={{ width: '100%' }}
+/>
 
-
-                      <td style={{ border: '1px solid #ccc', padding: '8px', textAlign: 'center' }}>
-                        {editId === item.id ? (
-                          <>
-                            <button
-                              onClick={() => handleSave(item.id)}
-                              style={{ marginRight: '8px', background: 'green', color: 'white' }}
-                            >
-                              Save
-                            </button>
-                            <button onClick={handleCancel} style={{ background: 'gray', color: 'white' }}>
-                              Cancel
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => handleEdit(item)} style={{ marginRight: '8px' }}>
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDelete(item.id)}
-                              style={{
-                                color: 'white',
-                                background: 'red',
-                                border: 'none',
-                                padding: '5px 8px',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
           ) : (
-            <p>No {selectedOption === 'customer' ? 'customers' : 'products'} found.</p>
+            item.number
           )}
+        </td>
+      )}
+      <td style={{ border: '1px solid #ccc', padding: '8px', textAlign: 'center' }}>
+        {editId === item.id ? (
+          <>
+            <button
+              onClick={() => handleSave(item.id)}
+              style={{ marginRight: '8px', background: 'green', color: 'white' }}
+            >
+              Save
+            </button>
+            <button
+              onClick={handleCancel}
+              style={{ background: 'gray', color: 'white' }}
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => handleEdit(item)} style={{ marginRight: '8px' }}>
+              Edit
+            </button>
+            <button
+              onClick={() => handleDelete(item.id)}
+              style={{
+                color: 'white',
+                background: 'red',
+                border: 'none',
+                padding: '5px 8px',
+                cursor: 'pointer'
+              }}
+            >
+              Delete
+            </button>
+          </>
+        )}
+      </td>
+    </tr>
+  ))}
+</tbody>
+
+      </table>
+    ) : (
+      <p>No {selectedOption === 'customer' ? 'customers' : 'products'} found.</p>
+    )}
+  </>
+)}
         </div>
       )}
     </div>

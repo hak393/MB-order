@@ -31,6 +31,8 @@ const OrderPage = () => {
     [highlightedProdIndex, setHighlightedProdIndex] = useState(-1);
   const [justSelectedProduct, setJustSelectedProduct] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [kgRate, setKgRate] = useState('');
+
 
   
 
@@ -270,15 +272,17 @@ const showAlert = (message, type = "error") => {
       : lessUnit; // for NET, pair, Full Bill, half Bill
 
   const newItem = {
-    productName,
-    unit: selectedProdUnit,
-    less,
-    qty: finalQty,
-    weight,
-    price,
-    packQty: selectedProdQty,
-    packet: unit === 'pk' ? qty : '' // ✅ only keep packet if PK, else empty
-  };
+  productName,
+  unit: selectedProdUnit,
+  less,
+  qty: finalQty,
+  weight,
+  price,
+  kgRate,   // ✅ added here
+  packQty: selectedProdQty,
+  packet: unit === 'pk' ? qty : ''
+};
+
 
   if (editing) {
     if (editing.source === 'pending')
@@ -308,8 +312,34 @@ const showAlert = (message, type = "error") => {
   resetForm();
 };
 
+// Helper to move focus to next input
+const handleKeyDown = (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+
+    // ✅ Find all focusable elements inside the page
+    const focusable = Array.from(
+      document.querySelectorAll(
+        'input, select, textarea, button'
+      )
+    ).filter(el => !el.disabled && el.type !== "hidden");
+
+    const index = focusable.indexOf(e.target);
+    if (index >= 0) {
+      focusable[index + 1]?.focus();
+    }
+  }
+};
+
+  const radioGroupRef = useRef(null);
+  const priceInputRef = useRef(null);
+  const weightInputRef = useRef(null);
+  const lessValInputRef = useRef(null);
+  const transportInputRef = useRef(null);
+
+
   const resetForm = () => {
-    setProductName(''); setUnit('pk'); setLessVal(''); setLessUnit('%'); setQty(''); setWeight(''); setPrice('');
+    setProductName(''); setUnit('pk'); setLessVal(''); setLessUnit('%'); setQty(''); setWeight(''); setPrice(''); setKgRate('');
     setEditing(null); setValidProduct(false); setProductError(false); setSelectedProdQty(1); setSelectedProdUnit('pcs');
     productInputRef.current?.focus();
   };
@@ -362,35 +392,36 @@ const showAlert = (message, type = "error") => {
       const newItems = customers[c]?.items || [];
 
       const pendingOrderRows = normalizedPending.map(
-        ({ productName, qty, unit, weight, price, less, packQty, packet }) => ({
-          productName,
-          qty,
-          unit,
-          weight: weight || '',
-          price: price || '',
-          less:
-            (typeof less === 'number' || (typeof less === 'string' && !isNaN(Number(less))))
-              ? `${less}%`
-              : (less || ''),
-          packQty: packQty || '',
-          packet: packet ?? '' // ✅ Store packet value
-        })
-      );
+  ({ productName, qty, unit, weight, price, kgRate, less, packQty, packet }) => ({
+    productName,
+    qty,
+    unit,
+    weight: weight || '',
+    price: price || '',
+    kgRate: kgRate || '',   // ✅ take from item
+    less:
+      (typeof less === 'number' || (typeof less === 'string' && !isNaN(Number(less))))
+        ? `${less}%`
+        : (less || ''),
+    packQty: packQty || '',
+    packet: packet ?? ''
+  })
+);
 
+const items = newItems.map(
+  ({ productName, qty, unit, weight, price, kgRate, less, packQty, packet }) => ({
+    productName,
+    qty,
+    unit,
+    weight: weight || '',
+    price: price || '',
+    kgRate: kgRate || '',   // ✅ take from item
+    less: less || '',
+    packQty: packQty || '',
+    packet: packet ?? ''
+  })
+);
 
-
-      const items = newItems.map(
-        ({ productName, qty, unit, weight, price, less, packQty, packet }) => ({
-          productName,
-          qty,
-          unit,
-          weight: weight || '',
-          price: price || '',
-          less: less || '',
-          packQty: packQty || '',
-          packet: packet ?? '' // ✅ Store packet value
-        })
-      );
 
 
       // 3️⃣ Merge data with just-created entry
@@ -438,22 +469,27 @@ showAlert(`Order placed for customer "${c}"`);
   };
 
   const handleEdit = (type, index) => {
-    const item = type === 'pending' ? pendingOrders[index] : customers[custName].items[index];
-    const match = item.productName.match(/\((\d+)\s*pcs\)/i); // case-insensitive match for (number pcs)
-    const packQty = match ? parseInt(match[1]) : item.packQty || 1;
+  const item = type === 'pending' ? pendingOrders[index] : customers[custName].items[index];
+  const match = item.productName.match(/\((\d+)\s*pcs\)/i);
+  const packQty = match ? parseInt(match[1]) : item.packQty || 1;
 
-    setSelectedProdQty(packQty);
-    setProductName(item.productName);
-    setQty('');
-    setWeight(item.weight || '');
-    setPrice(item.price || '');
-    setLessVal(item.less === 'NET' ? '' : item.less?.replace('%', '').trim() || '');
-    setLessUnit(item.less === 'NET' ? 'NET' : '%');
-    setUnit('pk');
-    setSelectedProdUnit(item.unit || 'pcs');
-    setEditing({ source: type, index });
-    productInputRef.current.focus();
-  };
+  setSelectedProdQty(packQty);
+  setProductName(item.productName);
+  setQty(item.packet || item.qty || '');
+  setWeight(item.weight || '');
+  setPrice(item.price || '');
+  setKgRate(item.kgRate || '');   // ✅ put kgRate into input field
+  setLessVal(item.less === 'NET' ? '' : item.less?.replace('%', '').trim() || '');
+  setLessUnit(item.less === 'NET' ? 'NET' : '%');
+  setUnit('pk');
+  setSelectedProdUnit(item.unit || 'pcs');
+  setEditing({ source: type, index });
+
+  // 🔥 FIX: focus directly on Qty input instead of Product
+  qtyInputRef.current?.focus();
+};
+
+
 
   const deletePendingItem = async i => {
     const key = pendingOrders[i].key;
@@ -518,38 +554,100 @@ showAlert(`Order placed for customer "${c}"`);
     </ul>
   )}
 </div>
-
-        <input placeholder="Qty" value={qty} onChange={e => setQty(e.target.value)} ref={qtyInputRef} />
-        <div style={{ display: 'flex', gap: '25px', alignItems: 'center', height: '35px' }}>
-          <label><input type="radio" name="unit" value="pk" checked={unit === 'pk'} onChange={() => setUnit('pk')} />Pk</label>
-          <label><input type="radio" name="unit" value="loose" checked={unit === 'loose'} onChange={() => setUnit('loose')} />Loose</label>
-        </div>
-        <input placeholder="Price" value={price} onChange={e => setPrice(e.target.value)} />
-        <input placeholder="Weight" value={weight} onChange={e => setWeight(e.target.value)} />
         <input
-          placeholder="Less Value"
-          value={lessVal}
-          onChange={e => setLessVal(e.target.value)}
-          disabled={lessUnit !== '%'}
-          style={{
-            backgroundColor: lessUnit !== '%' ? '#e0e0e0' : 'white',
-            color: lessUnit !== '%' ? '#7a7a7a' : 'black',
-            cursor: lessUnit !== '%' ? 'not-allowed' : 'text'
-          }}
-        />
+  placeholder="Qty"
+  value={qty}
+  onChange={e => setQty(e.target.value)}
+  ref={qtyInputRef}
+  onKeyDown={handleKeyDown}   // ✅ added
+/>
 
-        <select value={lessUnit} onChange={e => setLessUnit(e.target.value)}>
-          <option value="%">%</option>
-          <option value="NET">NET</option>
-          <option value="pair">Pair</option>
-          <option value="Full Bill">Full Bill</option>
-          <option value="half Bill">Half Bill</option>
-        </select>
-        <input
-          placeholder="Transport Name"
-          value={transportName}
-          onChange={(e) => setTransportName(e.target.value)}
-        />
+<div style={{ display: 'flex', gap: '25px', alignItems: 'center', height: '35px' }}>
+  <label>
+    <input
+      type="radio"
+      name="unit"
+      value="pk"
+      checked={unit === 'pk'}
+      onChange={() => setUnit('pk')}
+      onKeyDown={handleKeyDown}   // ✅ added
+    />
+    Pk
+  </label>
+  <label>
+    <input
+      type="radio"
+      name="unit"
+      value="loose"
+      checked={unit === 'loose'}
+      onChange={() => setUnit('loose')}
+      onKeyDown={handleKeyDown}   // ✅ added
+    />
+    Loose
+  </label>
+</div>
+
+<input
+  placeholder="Price"
+  value={price}
+  onChange={e => setPrice(e.target.value)}
+  onKeyDown={handleKeyDown}   // ✅ added
+/>
+<input
+  placeholder="KG Rate"
+  value={kgRate}
+  onChange={e => setKgRate(e.target.value)}
+  onKeyDown={handleKeyDown}
+/>
+
+{/* <input
+  placeholder="Weight"
+  value={weight}
+  onChange={e => setWeight(e.target.value)}
+  onKeyDown={handleKeyDown}   // ✅ added
+  style={{ display: 'none' }}  // ✅ hide weight input
+/> */}
+
+
+<input
+  placeholder="Less Value"
+  value={lessVal}
+  onChange={e => setLessVal(e.target.value)}
+  disabled={lessUnit !== '%'}
+  style={{
+    backgroundColor: lessUnit !== '%' ? '#e0e0e0' : 'white',
+    color: lessUnit !== '%' ? '#7a7a7a' : 'black',
+    cursor: lessUnit !== '%' ? 'not-allowed' : 'text'
+  }}
+  onKeyDown={handleKeyDown}   // ✅ added
+/>
+
+<select
+  value={lessUnit}
+  onChange={e => {
+    setLessUnit(e.target.value);
+    handleKeyDown({ key: "Enter", preventDefault: () => {}, target: e.target });
+  }}
+  onClick={e => {
+    // ✅ even if same option is clicked, still trigger
+    handleKeyDown({ key: "Enter", preventDefault: () => {}, target: e.target });
+  }}
+>
+  <option value="%">%</option>
+  <option value="NET">NET</option>
+  <option value="pair">Pair</option>
+  <option value="Full Bill">Full Bill</option>
+  <option value="half Bill">Half Bill</option>
+</select>
+
+
+<input
+  placeholder="Transport Name"
+  value={transportName}
+  onChange={(e) => setTransportName(e.target.value)}
+  onKeyDown={handleKeyDown}   // ✅ added
+/>
+
 
 
 
@@ -567,17 +665,19 @@ showAlert(`Order placed for customer "${c}"`);
 
               <table className="order-table">
                 <thead>
-                  <tr>
-                    <th>Sr No</th> {/* New column */}
-                    <th>Product</th>
-                    <th>Qty</th>
-                    <th>Weight</th>
-                    <th>Price</th>
-                    <th>Less</th>
-                    <th>Packet</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
+  <tr>
+    <th>Sr No</th>
+    <th>Product</th>
+    <th>Qty</th>
+    {/* <th>Weight</th>  ✅ hidden */}
+    <th>KG Rate</th>   {/* ✅ new column */}
+    <th>Price</th>
+    <th>Less</th>
+    <th>Packet</th>
+    <th>Actions</th>
+  </tr>
+</thead>
+
 
                 <tbody>
                   {pendingOrders.map((item, i) => (
@@ -585,7 +685,8 @@ showAlert(`Order placed for customer "${c}"`);
                       <td>{i + 1}</td> {/* Sr No */}
                       <td>{item.productName}</td>
                       <td>{`${item.qty ?? item.remainingQty} ${item.unit}`}</td>
-                      <td>{item.weight || '-'}</td>
+                      {/* <td>{item.weight || '-'}</td> */}
+                      <td>{item.kgRate || '-'}</td>   {/* ✅ show KG Rate */}
                       <td>₹{item.price}</td>
                       <td>
                         {item.less
@@ -606,7 +707,7 @@ showAlert(`Order placed for customer "${c}"`);
                       <td>{pendingOrders.length + i + 1}</td> {/* Continue numbering after pending orders */}
                       <td>{item.productName}</td>
                       <td>{`${item.qty} ${item.unit}`}</td>
-                      <td>{item.weight || '-'}</td>
+                      <td>{item.kgRate || '-'}</td>   {/* ✅ added here */}
                       <td>₹{item.price}</td>
                       <td>{item.less || '-'}</td>
                       <td>{item.packet ?? '-'}</td>
