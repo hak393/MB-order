@@ -1,7 +1,7 @@
 // src/component/PendingPage.jsx
 import React, { useEffect, useState } from 'react';
 import { database } from '../firebase/firebase'; 
-import { ref, onValue, remove } from 'firebase/database';
+import { ref, onValue, remove, set } from 'firebase/database';
 import './Style.css';
 
 const PendingPage = () => {
@@ -9,6 +9,15 @@ const PendingPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredKeys, setFilteredKeys] = useState([]);
   const [selectedKey, setSelectedKey] = useState(null);
+  const [selectedEditId, setSelectedEditId] = useState(null);
+const [editValues, setEditValues] = useState({
+  qty: '',
+  weight: '',
+  less: '',
+  price: '',
+  packet: ''
+});
+
 
   useEffect(() => {
     const pendingRef = ref(database, 'pendingOrders');
@@ -70,6 +79,32 @@ const PendingPage = () => {
     const date = new Date(timestamp);
     return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
   };
+
+  const handleSaveEdit = (orderId, key) => {
+  const up = [...groupedOrders[key]];
+  const index = up.findIndex(o => o.id === orderId);
+  if (index > -1) {
+    up[index] = {
+      ...up[index],
+      remainingQty: editValues.qty,
+      weight: editValues.weight,
+      less: editValues.less,
+      price: editValues.price,
+      packet: editValues.packet
+    };
+
+    // Update Firebase
+    const orderRef = ref(database, `pendingOrders/${orderId}`);
+    set(orderRef, up[index]);
+
+    const updatedGroupedOrders = { ...groupedOrders };
+    updatedGroupedOrders[key] = up;
+    setGroupedOrders(updatedGroupedOrders);
+  }
+
+  setSelectedEditId(null);
+};
+
 
   const formatLess = (less) => {
     if (!less) return '-';
@@ -189,26 +224,201 @@ const PendingPage = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map((order, index) => (
-                    <tr key={order.id || index}>
-                      <td>{order.productName}</td>
-                      <td>{`${order.remainingQty} ${order.unit}`}</td>
-                      <td>{order.weight || '-'}</td>
-                      <td>{formatLess(order.less)}</td>
-                      <td>₹{order.price}</td>
-                      <td>{order.packet || '-'}</td>
-                      <td>{formatTimestamp(order.timestamp)}</td>
-                      <td>
-                        <button
-                          className="delete-button"
-                          onClick={() => handleDelete(order.id, key)}
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+  {orders.map((order, index) => {
+    const isEditing = order.id === selectedEditId; // track which row is in edit mode
+    return (
+      <tr key={order.id || index}>
+        <td>{order.productName}</td>
+        
+        {/* Qty */}
+        <td>
+          {isEditing ? (
+            <input
+              type="number"
+              value={editValues.qty}
+              onChange={(e) =>
+                setEditValues({ ...editValues, qty: e.target.value })
+              }
+              style={{ width: '60px' }}
+            />
+          ) : (
+            `${order.remainingQty} ${order.unit}`
+          )}
+        </td>
+
+        {/* Weight */}
+        <td>
+          {isEditing ? (
+            <input
+              type="text"
+              value={editValues.weight}
+              onChange={(e) =>
+                setEditValues({ ...editValues, weight: e.target.value })
+              }
+              style={{ width: '60px' }}
+            />
+          ) : (
+            order.weight || '-'
+          )}
+        </td>
+
+        {/* Less */}
+        {/* Less */}
+<td>
+  {isEditing ? (
+    (editValues.less?.includes("%") || !editValues.less) ? (
+      <div style={{ display: "flex", alignItems: "center" }}>
+        <input
+          type="number"
+          value={editValues.less && editValues.less.includes("%") ? editValues.less.replace("%", "") : "0"}
+          onChange={e => {
+            let val = e.target.value;
+            setEditValues({ ...editValues, less: val ? val + "%" : "0%" });
+          }}
+          style={{
+            width: "60px",
+            fontSize: "14px",
+            padding: "4px",
+            border: "1px solid #ccc",
+            borderRadius: "4px 0 0 4px",
+            outline: "none"
+          }}
+        />
+        <select
+          value={["%", "NET", "Pair", "Full Bill", "Half Bill"].includes(editValues.less) ? editValues.less : "%"}
+          onChange={e => {
+            const val = e.target.value;
+            setEditValues({ ...editValues, less: val === "%" ? "0%" : val });
+          }}
+          style={{
+            fontSize: "14px",
+            padding: "4px",
+            border: "1px solid #ccc",
+            borderLeft: "none",
+            borderRadius: "0 4px 4px 0",
+            backgroundColor: "#f9f9f9",
+            cursor: "pointer",
+            width: "90px"
+          }}
+        >
+          <option value="%">%</option>
+          <option value="NET">NET</option>
+          <option value="Pair">Pair</option>
+          <option value="Full Bill">Full Bill</option>
+          <option value="Half Bill">Half Bill</option>
+        </select>
+      </div>
+    ) : (
+      <select
+        value={editValues.less}
+        onChange={e => setEditValues({ ...editValues, less: e.target.value })}
+        style={{
+          width: "120px",
+          fontSize: "14px",
+          padding: "4px",
+          borderRadius: "4px",
+          border: "1px solid #ccc",
+          backgroundColor: "#fff",
+          cursor: "pointer"
+        }}
+      >
+        <option value="%">%</option>
+        <option value="NET">NET</option>
+        <option value="Pair">Pair</option>
+        <option value="Full Bill">Full Bill</option>
+        <option value="Half Bill">Half Bill</option>
+        {!["%", "NET", "Pair", "Full Bill", "Half Bill"].includes(editValues.less) && (
+          <option value={editValues.less}>{editValues.less}</option>
+        )}
+      </select>
+    )
+  ) : (
+    order.less || "-"
+  )}
+</td>
+
+
+        {/* Price */}
+        <td>
+          {isEditing ? (
+            <input
+              type="number"
+              value={editValues.price}
+              onChange={(e) =>
+                setEditValues({ ...editValues, price: e.target.value })
+              }
+              style={{ width: '60px' }}
+            />
+          ) : (
+            `₹${order.price}`
+          )}
+        </td>
+
+        {/* Packet */}
+        <td>
+          {isEditing ? (
+            <input
+              type="text"
+              value={editValues.packet}
+              onChange={(e) =>
+                setEditValues({ ...editValues, packet: e.target.value })
+              }
+              style={{ width: '60px' }}
+            />
+          ) : (
+            order.packet || '-'
+          )}
+        </td>
+
+        <td>{formatTimestamp(order.timestamp)}</td>
+
+        <td>
+          {isEditing ? (
+            <>
+              <button
+                className="save-button"
+                onClick={() => handleSaveEdit(order.id, key)}
+              >
+                Save
+              </button>
+              <button
+                className="cancel-button"
+                onClick={() => setSelectedEditId(null)}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                className="edit-button"
+                onClick={() => {
+                  setSelectedEditId(order.id);
+                  setEditValues({
+                    qty: order.remainingQty,
+                    weight: order.weight || '',
+                    less: order.less || '',
+                    price: order.price,
+                    packet: order.packet || ''
+                  });
+                }}
+              >
+                Edit
+              </button>
+              <button
+                className="delete-button"
+                onClick={() => handleDelete(order.id, key)}
+              >
+                Delete
+              </button>
+            </>
+          )}
+        </td>
+      </tr>
+    );
+  })}
+</tbody>
+
               </table>
             </div>
           );

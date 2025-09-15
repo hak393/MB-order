@@ -214,23 +214,7 @@ const AddProduct = () => {
           {/* Unit Dropdown */}
           <select
   value={unit}
-  onChange={(e) => {
-    setUnit(e.target.value);
-    // ✅ Run handleKeyDown after selecting
-    handleKeyDown({
-      key: "Enter",
-      preventDefault: () => {},
-      target: e.target,
-    });
-  }}
-  onClick={(e) => {
-    // ✅ Even if same option is clicked, still run handleKeyDown
-    handleKeyDown({
-      key: "Enter",
-      preventDefault: () => {},
-      target: e.target,
-    });
-  }}
+  onChange={(e) => setUnit(e.target.value)}
   style={{
     marginTop: "10px",
     marginLeft: "10px",
@@ -247,8 +231,8 @@ const AddProduct = () => {
   <option value="grs">grs</option>
 </select>
 
-
 <br />
+
 
           {/* Save Product Button */}
           <button

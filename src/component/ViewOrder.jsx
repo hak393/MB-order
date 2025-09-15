@@ -133,14 +133,28 @@ useEffect(() => {
     if (firstSellInput) firstSellInput.focus();
     return;
   } else if (colName === "packet") {
-    // Move to next row Sell Qty
-    const nextRow = rowIdx + 1;
-    const itemsCount = (editOrderData.items || []).length;
-    if (nextRow < itemsCount) {
-      const nextSellInput = document.querySelector(`input[data-row="${nextRow}"][data-col="sellQty"]`);
-      if (nextSellInput) nextSellInput.focus();
-      return;
+    // Move to next row Sell Qty if exists
+    const items = editOrderData.items || [];
+    const nextRowIdx = rowIdx + 1;
+
+    if (nextRowIdx < items.length) {
+      const nextSellInput = document.querySelector(`input[data-row="${nextRowIdx}"][data-col="sellQty"]`);
+      if (nextSellInput) {
+        nextSellInput.focus();
+      } else {
+        // fallback: focus first input in next row
+        const nextRow = document.querySelector(`tr:nth-child(${nextRowIdx + 1})`);
+        if (nextRow) {
+          const firstInput = nextRow.querySelector('input');
+          if (firstInput) firstInput.focus();
+        }
+      }
+    } else {
+      // ✅ If no next row, focus Sell Order button
+      const sellOrderBtn = document.getElementById("sellOrderBtn");
+      if (sellOrderBtn) sellOrderBtn.focus();
     }
+    return;
   }
 
   // ✅ Default behavior: navigate within current row inputs + first button
@@ -203,131 +217,165 @@ useEffect(() => {
 
   // Replace saveEdit function with this updated version:
 
-  const saveEdit = async () => {
-    const { user, customerName, city, items, orderId } = editOrderData;
 
-    if (!transportName.trim()) {
-      return showAlert("Transport Name is required.", "error");
+
+const saveEdit = async () => {
+  const { user, customerName, city, items, orderId } = editOrderData;
+
+  if (!transportName.trim()) {
+    return showAlert("Transport Name is required.", "error");
+  }
+
+  for (const i of items) {
+    if (i.sellQty === "" || i.sellQty === null || i.sellQty === undefined) {
+      return showAlert("Sell Qty is required for all items.", "error");
     }
 
-    for (const i of items) {
-      if (i.sellQty === "" || i.sellQty === null || i.sellQty === undefined) {
-        return showAlert("Sell Qty is required for all items.", "error");
-      }
-
-      const sell = +i.sellQty;
-      if (isNaN(sell) || sell < 0) {
-        return showAlert("Please enter valid Sell Qty for all items.", "error");
-      }
-
-      if (!i.price || !i.less) {
-        return showAlert("Price and Less fields are required for all items.", "error");
-      }
+    const sell = +i.sellQty;
+    if (isNaN(sell) || sell < 0) {
+      return showAlert("Please enter valid Sell Qty for all items.", "error");
     }
 
-    // ✅ Split items: >0 goes to sellOrders, =0 goes to pendingOrders
-    const sellItems = [];
-    const pendingItems = [];
+    if (!i.price || !i.less) {
+      return showAlert("Price and Less fields are required for all items.", "error");
+    }
+  }
 
-    items.forEach(i => {
-      const sell = +i.sellQty;
-      const avail = +i.qty || 0;
+  // Split items into sell and pending
+  const sellItems = [];
+  const pendingItems = [];
 
-      if (sell > 0) {
-        sellItems.push({
-          ...i,
-          originalQty: avail,
-          soldQty: sell,
-          remainingQty: avail - sell
-        });
-      } else {
-        // ✅ full row into pending
+  items.forEach(i => {
+    const sell = +i.sellQty;
+    const avail = +i.qty || 0;
+
+    if (sell > 0) {
+      sellItems.push({
+        ...i,
+        originalQty: avail,
+        soldQty: sell,
+        remainingQty: avail - sell
+      });
+    } else {
+      pendingItems.push({
+        ...i,
+        originalQty: avail,
+        soldQty: 0,
+        remainingQty: avail
+      });
+    }
+  });
+
+  // Fetch customer phone
+  let phoneNumber = '-';
+  try {
+    const snapshot = await get(ref(db, 'customers'));
+    if (snapshot.exists()) {
+      const customers = snapshot.val();
+      for (let key in customers) {
+        if (customers[key].name === customerName) {
+          phoneNumber = customers[key].number || '-';
+          break;
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error fetching customer phone:", err);
+  }
+
+  // Fetch & increment challanCounter in Firebase
+  let newChallanNo = "01";
+  try {
+    const counterRef = ref(db, 'challanCounter/lastNo');
+    const snapshot = await get(counterRef);
+    let lastNo = snapshot.exists() ? snapshot.val() : 0;
+    lastNo = parseInt(lastNo, 10) || 0;
+    newChallanNo = String(lastNo + 1).padStart(2, "0");
+
+    // ✅ Update lastNo in Firebase
+    await update(ref(db, 'challanCounter'), { lastNo: lastNo + 1 });
+  } catch (err) {
+    console.error("Error updating challanCounter:", err);
+  }
+
+  // Only print + push sellOrders if sold items exist
+  if (sellItems.length > 0) {
+    await printSoldItems(customerName, city, sellItems, phoneNumber, transportName, newChallanNo);
+
+    await push(ref(db, 'sellOrders'), {
+      user,
+      customerName,
+      city,
+      transportName: transportName || '',
+      challanNo: newChallanNo,
+      timestamp: new Date().toISOString(),
+      items: sellItems.map(i => ({
+        productName: i.productName,
+        originalQty: i.originalQty,
+        soldQty: i.soldQty,
+        unit: i.unit,
+        weight: i.weight,
+        price: i.price,
+        less: i.less,
+        packet: i.packet || ''
+      }))
+    });
+
+    // Remaining qty > 0 goes to pending
+    sellItems.forEach(i => {
+      if (i.remainingQty > 0) {
         pendingItems.push({
-          ...i,
-          originalQty: avail,
-          soldQty: 0,
-          remainingQty: avail
+          user,
+          customerName,
+          city: city || '',
+          productName: i.productName,
+          soldQty: i.soldQty,
+          remainingQty: i.remainingQty,
+          unit: i.unit,
+          weight: i.weight || '',
+          price: i.price,
+          less: i.less || '',
+          packet: i.packet || '',
+          timestamp: new Date().toISOString()
         });
       }
     });
+  }
 
-    // ✅ Only print + push sellOrders if there are sold items
-    if (sellItems.length > 0) {
-      await printSoldItems(customerName, city, sellItems, "-", transportName);
+  // Push pending rows
+  for (const i of pendingItems) {
+    await push(ref(db, 'pendingOrders'), {
+      user,
+      customerName,
+      city: i.city || city || '',
+      productName: i.productName,
+      soldQty: i.soldQty,
+      remainingQty: i.remainingQty,
+      unit: i.unit,
+      weight: i.weight || '',
+      price: i.price,
+      less: i.less || '',
+      packet: i.packet || '',
+      timestamp: new Date().toISOString()
+    });
+  }
 
-      await push(ref(db, 'sellOrders'), {
-        user,
-        customerName,
-        city,
-        transportName: transportName || '',
-        timestamp: new Date().toISOString(),
-        items: sellItems.map(i => ({
-          productName: i.productName,
-          originalQty: i.originalQty,
-          soldQty: i.soldQty,
-          unit: i.unit,
-          weight: i.weight,
-          price: i.price,
-          less: i.less,
-          packet: i.packet || ''
-        }))
-      });
+  // Remove original order
+  await remove(ref(db, `orders/${user}/${orderId}`));
+  setOrders(p => p.filter(o => !(o.user === user && o.orderId === orderId)));
+  setShowModal(false);
+};
 
-      // ✅ Remaining qty > 0 from sold rows → pending
-      sellItems.forEach(i => {
-        if (i.remainingQty > 0) {
-          pendingItems.push({
-            user,
-            customerName,
-            city: city || '',
-            productName: i.productName,
-            soldQty: i.soldQty,
-            remainingQty: i.remainingQty,
-            unit: i.unit,
-            weight: i.weight || '',
-            price: i.price,
-            less: i.less || '',
-            packet: i.packet || '',
-            timestamp: new Date().toISOString()
-          });
-        }
-      });
-    }
-
-    // ✅ Push all pending rows (both sell=0 and remaining from sold)
-    for (const i of pendingItems) {
-      await push(ref(db, 'pendingOrders'), {
-        user,
-        customerName,
-        city: i.city || city || '',
-        productName: i.productName,
-        soldQty: i.soldQty,
-        remainingQty: i.remainingQty,
-        unit: i.unit,
-        weight: i.weight || '',
-        price: i.price,
-        less: i.less || '',
-        packet: i.packet || '',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // ✅ Remove original order after processing
-    await remove(ref(db, `orders/${user}/${orderId}`));
-    setOrders(p => p.filter(o => !(o.user === user && o.orderId === orderId)));
-    setShowModal(false);
-  };
 
   const cleanProductName = n => n.replace(/\s*\([^)]*\)/g, '').trim();
 
 
-  const printSoldItems = (customerName, city, sold, phoneNumber, transportName) => {
-    const today = new Date();
-    const date = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')
-      }/${today.getFullYear()}`;
+  const printSoldItems = (customerName, city, sold, phoneNumber, transportName, challanNo) => {
+  const today = new Date();
+  const date = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
 
-    const w = window.open('', '_blank', 'width=900,height=650');
-    const html = `
+  const w = window.open('', '_blank', 'width=900,height=650');
+  const html = `
   <html>
   <head>
     <title>Packing Slip</title>
@@ -364,7 +412,7 @@ useEffect(() => {
         text-align: center;
       }
       thead {
-        display: table-header-group; /* ✅ Repeat header on every page */
+        display: table-header-group;
       }
       .page-number:after {
         counter-increment: page;
@@ -385,7 +433,7 @@ useEffect(() => {
           <th colspan="7">
             <div style="display:flex; justify-content:space-between; width:100%; font-size:20px;">
               <div><strong>Customer:</strong> ${customerName}</div>
-              <div><strong>Challan No.:</strong> -</div>
+              <div><strong>Challan No.:</strong> ${challanNo || '-'}</div>
             </div>
             <div style="display:flex; justify-content:space-between; width:100%; font-size:20px;">
               <div><strong>City:</strong> ${city}</div>
@@ -409,23 +457,24 @@ useEffect(() => {
       </thead>
       <tbody>
         ${(sold || [])
-        .map(
-          (i, idx) => `
+          .map(
+            (i, idx) => `
           <tr>
             <td>${idx + 1}</td>
             <td>${cleanProductName(i.productName)}</td>
-            <td>${i.soldQty}</td>
+            <td>${i.soldQty} ${i.unit || ""}</td>
             <td>${i.weight || '-'}</td>
             <td>${i.price}</td>
-            <td>${typeof i.less === 'number' || (typeof i.less === 'string' && !isNaN(Number(i.less)))
-              ? i.less + '%'
-              : i.less || '-'
+            <td>${
+              typeof i.less === 'number' || (typeof i.less === 'string' && !isNaN(Number(i.less)))
+                ? i.less + '%'
+                : i.less || '-'
             }</td>
             <td>${i.packet || '-'}</td>
           </tr>
         `
-        )
-        .join('')}
+          )
+          .join('')}
       </tbody>
     </table>
     <script>
@@ -436,9 +485,11 @@ useEffect(() => {
     </script>
   </body>
   </html>`;
-    w.document.write(html);
-    w.document.close();
-  };
+  w.document.write(html);
+  w.document.close();
+};
+
+
 
   const handlePrint = async (customerName, city, sold) => {
     try {
@@ -909,29 +960,99 @@ if (match && updatedItem.qty) {
             />
           </td>
           <td>
-  <input
-    list="less-options-edit"
-    type="text"
-    value={editedItem.less || ''}
-    onChange={e => setEditedItem({ ...editedItem, less: e.target.value })}
-    style={{ width: '60px', fontSize: '14px' }}
-    onBlur={e => {
-      let val = editedItem.less || '';
-      // ✅ Append % only if it's a number and no % already
-      if (!isNaN(val) && val !== '' && !val.includes('%')) {
-        setEditedItem({ ...editedItem, less: val + '%' });
-      }
-    }}
-    onKeyDown={handleKeyDown}
-  />
-  <datalist id="less-options-edit">
-    <option value="%"></option>
-    <option value="NET"></option>
-    <option value="Pair"></option>
-    <option value="Full Bill"></option>
-    <option value="Half Bill"></option>
-  </datalist>
+  {(editedItem.less?.includes("%") || !editedItem.less) ? (
+    // ✅ Show input + select combo when % or empty
+    <div style={{ display: "flex", alignItems: "center" }}>
+      <input
+        type="number"
+        value={editedItem.less && editedItem.less.includes("%") ? editedItem.less.replace("%", "") : "0"} // default 0 if empty
+        onChange={e =>
+          setEditedItem({ ...editedItem, less: e.target.value + "%" })
+        }
+        style={{
+          width: "60px",
+          fontSize: "14px",
+          padding: "4px",
+          border: "1px solid #ccc",
+          borderRadius: "4px 0 0 4px",
+          outline: "none"
+        }}
+        onBlur={e => {
+          let val = e.target.value;
+          if (!val) val = "0";
+          if (!val.includes("%")) val += "%";
+          setEditedItem({ ...editedItem, less: val });
+        }}
+        onKeyDown={handleKeyDown}
+      />
+      <select
+        value="%"
+        onChange={e => {
+          if (e.target.value === "%") {
+            if (!editedItem.less || !editedItem.less.includes("%")) {
+              setEditedItem({ ...editedItem, less: "0%" });
+            }
+          } else {
+            setEditedItem({ ...editedItem, less: e.target.value });
+          }
+        }}
+        style={{
+          fontSize: "14px",
+          padding: "4px",
+          border: "1px solid #ccc",
+          borderLeft: "none",
+          borderRadius: "0 4px 4px 0",
+          backgroundColor: "#f9f9f9",
+          cursor: "pointer",
+          width: "90px"
+        }}
+      >
+        <option value="%">%</option>
+        <option value="NET">NET</option>
+        <option value="Pair">Pair</option>
+        <option value="Full Bill">Full Bill</option>
+        <option value="Half Bill">Half Bill</option>
+      </select>
+    </div>
+  ) : (
+    // ✅ Normal select when not in % mode
+    <select
+      value={editedItem.less} // ✅ show exact value from Firebase
+      onChange={e => {
+        if (e.target.value === "%") {
+          setEditedItem({ ...editedItem, less: "0%" });
+        } else {
+          setEditedItem({ ...editedItem, less: e.target.value });
+        }
+      }}
+      style={{
+        width: "120px",
+        fontSize: "14px",
+        padding: "4px",
+        borderRadius: "4px",
+        border: "1px solid #ccc",
+        backgroundColor: "#fff",
+        cursor: "pointer"
+      }}
+      onKeyDown={handleKeyDown}
+    >
+      {/* Predefined options */}
+      <option value="%">%</option>
+      <option value="NET">NET</option>
+      <option value="Pair">Pair</option>
+      <option value="Full Bill">Full Bill</option>
+      <option value="Half Bill">Half Bill</option>
+
+      {/* ✅ Add Firebase value if not present */}
+      {!["%", "NET", "Pair", "Full Bill", "Half Bill"].includes(editedItem.less) && (
+        <option value={editedItem.less}>{editedItem.less}</option>
+      )}
+    </select>
+  )}
 </td>
+
+
+
 
           <td>
             <input
@@ -1008,30 +1129,97 @@ if (match && updatedItem.qty) {
               onKeyDown={handleKeyDown}
             />
           </td>
-          <td>
-  <input
-    list="less-options-edit"
-    type="text"
-    value={editedItem.less || ''}
-    onChange={e => setEditedItem({ ...editedItem, less: e.target.value })}
-    style={{ width: '60px', fontSize: '14px' }}
-    onBlur={e => {
-      let val = editedItem.less || '';
-      // ✅ Append % only if it's a number and no % already
-      if (!isNaN(val) && val !== '' && !val.includes('%')) {
-        setEditedItem({ ...editedItem, less: val + '%' });
-      }
-    }}
-    onKeyDown={handleKeyDown}
-  />
-  <datalist id="less-options-edit">
-    <option value="%"></option>
-    <option value="NET"></option>
-    <option value="Pair"></option>
-    <option value="Full Bill"></option>
-    <option value="Half Bill"></option>
-  </datalist>
+<td>
+  {editedItem.less?.includes("%") || !editedItem.less ? (
+    <div style={{ display: "flex", alignItems: "center" }}>
+      <input
+        type="number"
+        value={editedItem.less && editedItem.less.includes("%") ? editedItem.less.replace("%", "") : "0"}
+        onChange={e =>
+          setEditedItem({ ...editedItem, less: e.target.value + "%" })
+        }
+        style={{
+          width: "60px",
+          fontSize: "14px",
+          padding: "4px",
+          border: "1px solid #ccc",
+          borderRadius: "4px 0 0 4px",
+          outline: "none"
+        }}
+        onBlur={e => {
+          let val = e.target.value;
+          if (!val) val = "0";
+          if (!val.includes("%")) val += "%";
+          setEditedItem({ ...editedItem, less: val });
+        }}
+        onKeyDown={handleKeyDown}
+      />
+      <select
+        value="%"
+        onChange={e => {
+          if (e.target.value === "%") {
+            if (!editedItem.less || !editedItem.less.includes("%")) {
+              setEditedItem({ ...editedItem, less: "0%" });
+            }
+          } else {
+            setEditedItem({ ...editedItem, less: e.target.value });
+          }
+        }}
+        style={{
+          fontSize: "14px",
+          padding: "4px",
+          border: "1px solid #ccc",
+          borderLeft: "none",
+          borderRadius: "0 4px 4px 0",
+          backgroundColor: "#f9f9f9",
+          cursor: "pointer",
+          width: "90px"
+        }}
+      >
+        <option value="%">%</option>
+        <option value="NET">NET</option>
+        <option value="Pair">Pair</option>
+        <option value="Full Bill">Full Bill</option>
+        <option value="Half Bill">Half Bill</option>
+      </select>
+    </div>
+  ) : (
+    <select
+      value={editedItem.less} // ✅ Use exact value from Firebase
+      onChange={e => {
+        if (e.target.value === "%") {
+          setEditedItem({ ...editedItem, less: "0%" });
+        } else {
+          setEditedItem({ ...editedItem, less: e.target.value });
+        }
+      }}
+      style={{
+        width: "120px",
+        fontSize: "14px",
+        padding: "4px",
+        borderRadius: "4px",
+        border: "1px solid #ccc",
+        backgroundColor: "#fff",
+        cursor: "pointer"
+      }}
+      onKeyDown={handleKeyDown}
+    >
+      {/* Predefined options */}
+      <option value="%">%</option>
+      <option value="NET">NET</option>
+      <option value="Pair">Pair</option>
+      <option value="Full Bill">Full Bill</option>
+      <option value="Half Bill">Half Bill</option>
+
+      {/* ✅ Add Firebase value if not present in options */}
+      {!["%", "NET", "Pair", "Full Bill", "Half Bill"].includes(editedItem.less) && (
+        <option value={editedItem.less}>{editedItem.less}</option>
+      )}
+    </select>
+  )}
 </td>
+
+
 
           <td>
             <input
@@ -1250,67 +1438,131 @@ if (match && updatedItem.qty) {
                 />
               </td>
               <td>
-  <input
-    list={`less-options-${idx}`}
-    type="text"
-    value={item.less || ''}
-    style={{ width: '70px' }}
-    required
-    data-row={idx}
-    data-col="less"
-    onChange={e => {
-      const up = [...editOrderData.items];
-      up[idx].less = e.target.value; // just update as user types
-      setEditOrderData({ ...editOrderData, items: up });
-    }}
-    onBlur={e => {
-      const up = [...editOrderData.items];
-      let val = up[idx].less || '';
-
-      // ✅ Only append % if it's a number and doesn't already have %
-      if (!isNaN(val) && val !== '' && !val.includes('%')) {
-        up[idx].less = val + '%';
-      }
-
-      setEditOrderData({ ...editOrderData, items: up });
-    }}
-    onKeyDown={(e) => handleKeyDown(e, idx, "less")}
-  />
-  <datalist id={`less-options-${idx}`}>
-    <option value="%"></option>
-    <option value="NET"></option>
-    <option value="Pair"></option>
-    <option value="Full Bill"></option>
-    <option value="Half Bill"></option>
-  </datalist>
+  {(item.less?.includes("%") || !item.less) ? (
+    // ✅ Show input + select combo when % or empty
+    <div style={{ display: "flex", alignItems: "center" }}>
+      <input
+        type="number"
+        value={item.less && item.less.includes("%") ? item.less.replace("%", "") : "0"} // default 0 if empty
+        onChange={e => {
+          const up = [...editOrderData.items];
+          let val = e.target.value;
+          up[idx].less = val ? val + "%" : "0%"; // append % or default 0%
+          setEditOrderData({ ...editOrderData, items: up });
+        }}
+        style={{
+          width: "60px",
+          fontSize: "14px",
+          padding: "4px",
+          border: "1px solid #ccc",
+          borderRadius: "4px 0 0 4px",
+          outline: "none"
+        }}
+        onBlur={e => {
+          const up = [...editOrderData.items];
+          let val = e.target.value;
+          if (!val) val = "0";
+          if (!val.includes("%")) val += "%";
+          up[idx].less = val;
+          setEditOrderData({ ...editOrderData, items: up });
+        }}
+        onKeyDown={e => handleKeyDown(e, idx, "less")}
+      />
+      <select
+        value={
+          ["%", "NET", "Pair", "Full Bill", "Half Bill"].includes(item.less)
+            ? item.less
+            : "%"
+        }
+        onChange={e => {
+          const up = [...editOrderData.items];
+          const val = e.target.value;
+          if (val === "%") {
+            if (!up[idx].less || !up[idx].less.includes("%")) {
+              up[idx].less = "0%";
+            }
+          } else {
+            up[idx].less = val; // NET / Pair / Full Bill / Half Bill
+          }
+          setEditOrderData({ ...editOrderData, items: up });
+        }}
+        style={{
+          fontSize: "14px",
+          padding: "4px",
+          border: "1px solid #ccc",
+          borderLeft: "none",
+          borderRadius: "0 4px 4px 0",
+          backgroundColor: "#f9f9f9",
+          cursor: "pointer",
+          width: "90px"
+        }}
+      >
+        <option value="%">%</option>
+        <option value="NET">NET</option>
+        <option value="Pair">Pair</option>
+        <option value="Full Bill">Full Bill</option>
+        <option value="Half Bill">Half Bill</option>
+      </select>
+    </div>
+  ) : (
+    // ✅ Normal select when not % (also shows any value from Firebase)
+    <select
+      value={item.less} // ✅ show exact value from Firebase
+      onChange={e => {
+        const up = [...editOrderData.items];
+        if (e.target.value === "%") {
+          up[idx].less = "0%";
+        } else {
+          up[idx].less = e.target.value;
+        }
+        setEditOrderData({ ...editOrderData, items: up });
+      }}
+      style={{
+        width: "120px",
+        fontSize: "14px",
+        padding: "4px",
+        borderRadius: "4px",
+        border: "1px solid #ccc",
+        backgroundColor: "#fff",
+        cursor: "pointer"
+      }}
+      onKeyDown={e => handleKeyDown(e, idx, "less")}
+    >
+      <option value="%">%</option>
+      <option value="NET">NET</option>
+      <option value="Pair">Pair</option>
+      <option value="Full Bill">Full Bill</option>
+      <option value="Half Bill">Half Bill</option>
+      {/* ✅ show Firebase value if not in predefined options */}
+      {!["%", "NET", "Pair", "Full Bill", "Half Bill"].includes(item.less) && (
+        <option value={item.less}>{item.less}</option>
+      )}
+    </select>
+  )}
 </td>
 
+
+
+
+
+
               <td>
-                <input
-  type="text"
-  value={item.packet || ''}
-  style={{ width: '70px' }}
-  data-row={idx}
-  data-col="packet"
-  onChange={e => {
-    const up = [...editOrderData.items];
-    up[idx].packet = e.target.value;
-    setEditOrderData({ ...editOrderData, items: up });
-  }}
-  onKeyDown={(e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
+  <input
+    type="text"
+    value={item.packet || ''}
+    style={{ width: '70px' }}
+    data-row={idx}
+    data-col="packet"
+    onChange={e => {
+      const up = [...editOrderData.items];
+      up[idx].packet = e.target.value;
+      setEditOrderData({ ...editOrderData, items: up });
+    }}
+    onKeyDown={(e) => handleKeyDown(e, idx, "packet")}
+  />
+</td>
 
-      // ✅ Jump directly to Sell Order button
-      const sellOrderBtn = document.getElementById("sellOrderBtn");
-      if (sellOrderBtn) sellOrderBtn.focus();
-    } else {
-      handleKeyDown(e, idx, "packet");
-    }
-  }}
-/>
 
-              </td>
             </tr>
           ))}
         </tbody>

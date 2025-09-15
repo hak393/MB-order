@@ -280,8 +280,18 @@ const EditAddProduct = () => {
     setSelectedProdQty(p.qty || 1);
     setSelectedProdUnit(p.unit || 'pcs');
     setPrice(p.price || '');
-    setLessVal(p.less === 'NET' ? '' : p.less?.replace('%', '').trim() || '');
-    setLessUnit(p.less === 'NET' ? 'NET' : '%');
+setLessVal(
+  ['NET', 'Pair', 'Half Bill', 'Full Bill'].includes(p.less)
+    ? ''
+    : p.less?.replace('%', '').trim() || ''
+);
+
+setLessUnit(
+  ['NET', 'Pair', 'Half Bill', 'Full Bill'].includes(p.less)
+    ? p.less
+    : '%'
+);
+
     setProdSuggestions([]);
     setValidProduct(true);
     setProductError(false);
@@ -522,8 +532,18 @@ const items = newItems.map(
   setWeight(item.weight || '');
   setPrice(item.price || '');
   setKgRate(item.kgRate || '');   // ✅ put kgRate into input field
-  setLessVal(item.less === 'NET' ? '' : item.less?.replace('%', '').trim() || '');
-  setLessUnit(item.less === 'NET' ? 'NET' : '%');
+setLessVal(
+  ['NET', 'Pair', 'Half Bill', 'Full Bill'].includes(item.less)
+    ? ''
+    : item.less?.replace('%', '').trim() || ''
+);
+
+setLessUnit(
+  ['NET', 'Pair', 'Half Bill', 'Full Bill'].includes(item.less)
+    ? item.less
+    : '%'
+);
+
   setUnit('pk');
   setSelectedProdUnit(item.unit || 'pcs');
   setEditing({ source: type, index });
@@ -678,19 +698,24 @@ const items = newItems.map(
   value={lessUnit}
   onChange={e => {
     setLessUnit(e.target.value);
-    handleKeyDown({ key: "Enter", preventDefault: () => {}, target: e.target });
   }}
-  onClick={e => {
-    // ✅ even if same option is clicked, still trigger
-    handleKeyDown({ key: "Enter", preventDefault: () => {}, target: e.target });
+  onBlur={e => {
+    // Trigger next focus when leaving the select (after selection)
+    handleKeyDown({
+      key: "Enter",
+      preventDefault: () => {},
+      target: e.target
+    });
   }}
 >
   <option value="%">%</option>
   <option value="NET">NET</option>
-  <option value="pair">Pair</option>
+  <option value="Pair">Pair</option>
   <option value="Full Bill">Full Bill</option>
-  <option value="half Bill">Half Bill</option>
+  <option value="Half Bill">Half Bill</option>
 </select>
+
+
 
 
 

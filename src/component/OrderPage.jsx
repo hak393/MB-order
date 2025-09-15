@@ -211,8 +211,18 @@ const showAlert = (message, type = "error") => {
     setSelectedProdQty(p.qty || 1);
     setSelectedProdUnit(p.unit || 'pcs');
   setPrice(p.price || '');
-  setLessVal(p.less === 'NET' ? '' : p.less?.replace('%', '').trim() || '');
-  setLessUnit(p.less === 'NET' ? 'NET' : '%');
+  setLessVal(
+  ['NET', 'Pair', 'Half Bill', 'Full Bill'].includes(p.less)
+    ? ''
+    : p.less?.replace('%', '').trim() || ''
+);
+
+setLessUnit(
+  ['NET', 'Pair', 'Half Bill', 'Full Bill'].includes(p.less)
+    ? p.less
+    : '%'
+);
+
   setProdSuggestions([]);
   setValidProduct(true);
   setProductError(false);
@@ -251,7 +261,6 @@ const showAlert = (message, type = "error") => {
   const addOrUpdate = () => {
   // ✅ Only enforce dropdown selection in ADD mode
   if (!editing) {
-    if (!validCustomer) return showAlert('Please select a valid customer from the list');
     if (!validProduct) return showAlert('Please select a valid product from the list');
   }
 
@@ -259,43 +268,55 @@ const showAlert = (message, type = "error") => {
   if (!productName) return showAlert('Select valid product');
   if (!qty && !editing) return showAlert('Fill all required fields');
 
+  // ✅ Extract packet qty from productName e.g. "XYZ (50 Pair)" → 50
+  const packetMatch = productName.match(/\((\d+)\s*[^)]*\)/);
+  const packetQtyFromName = packetMatch ? parseFloat(packetMatch[1]) : 1;
+
+  // ✅ multiplication logic
   let finalQty =
     unit === 'pk'
-      ? (qty ? parseFloat(qty) * parseFloat(selectedProdQty) : 0)
+      ? (qty ? parseFloat(qty) * packetQtyFromName : 0)
       : qty
       ? parseFloat(qty)
       : 0;
 
+  console.log("🚀 Pending Order Update Debug:");
+  console.log("Product:", productName);
+  console.log("Qty entered:", qty);
+  console.log("Packet Qty (from product name):", packetQtyFromName);
+  console.log("Final Qty (pcs):", finalQty);
+  console.log("Unit:", unit);
+
   const less =
     lessUnit === '%'
       ? (lessVal ? `${lessVal} %` : '')
-      : lessUnit; // for NET, pair, Full Bill, half Bill
+      : lessUnit; // for NET, Pair, Full Bill, Half Bill
 
   const newItem = {
-  productName,
-  unit: selectedProdUnit,
-  less,
-  qty: finalQty,
-  weight,
-  price,
-  kgRate,   // ✅ added here
-  packQty: selectedProdQty,
-  packet: unit === 'pk' ? qty : ''
-};
-
+    productName,
+    unit: selectedProdUnit,
+    less,
+    qty: finalQty,
+    weight,
+    price,
+    kgRate,
+    packQty: packetQtyFromName,   // ✅ use extracted value
+    packet: unit === 'pk' ? qty : ''
+  };
 
   if (editing) {
-    if (editing.source === 'pending')
+    if (editing.source === 'pending') {
       setPendingOrders(p =>
         p.map((x, i) => (i === editing.index ? { ...x, ...newItem } : x))
       );
-    else
+    } else {
       setCustomers(p => {
         const e = p[custName],
           items = [...(e?.items || [])];
         items[editing.index] = newItem;
         return { ...p, [custName]: { ...e, items } };
       });
+    }
   } else {
     setCustomers(p => {
       const e = p[custName] || {
@@ -311,6 +332,7 @@ const showAlert = (message, type = "error") => {
   }
   resetForm();
 };
+
 
 // Helper to move focus to next input
 const handleKeyDown = (e) => {
@@ -479,8 +501,18 @@ showAlert(`Order placed for customer "${c}"`);
   setWeight(item.weight || '');
   setPrice(item.price || '');
   setKgRate(item.kgRate || '');   // ✅ put kgRate into input field
-  setLessVal(item.less === 'NET' ? '' : item.less?.replace('%', '').trim() || '');
-  setLessUnit(item.less === 'NET' ? 'NET' : '%');
+setLessVal(
+  ['NET', 'Pair', 'Half Bill', 'Full Bill'].includes(item.less)
+    ? ''
+    : item.less?.replace('%', '').trim() || ''
+);
+
+setLessUnit(
+  ['NET', 'Pair', 'Half Bill', 'Full Bill'].includes(item.less)
+    ? item.less
+    : '%'
+);
+
   setUnit('pk');
   setSelectedProdUnit(item.unit || 'pcs');
   setEditing({ source: type, index });
@@ -626,19 +658,23 @@ showAlert(`Order placed for customer "${c}"`);
   value={lessUnit}
   onChange={e => {
     setLessUnit(e.target.value);
-    handleKeyDown({ key: "Enter", preventDefault: () => {}, target: e.target });
   }}
-  onClick={e => {
-    // ✅ even if same option is clicked, still trigger
-    handleKeyDown({ key: "Enter", preventDefault: () => {}, target: e.target });
+  onBlur={e => {
+    // Trigger next focus when leaving the select (after selection)
+    handleKeyDown({
+      key: "Enter",
+      preventDefault: () => {},
+      target: e.target
+    });
   }}
 >
   <option value="%">%</option>
   <option value="NET">NET</option>
-  <option value="pair">Pair</option>
+  <option value="Pair">Pair</option>
   <option value="Full Bill">Full Bill</option>
-  <option value="half Bill">Half Bill</option>
+  <option value="Half Bill">Half Bill</option>
 </select>
+
 
 
 <input

@@ -40,9 +40,10 @@ const updateProductNameEverywhere = async (productId, newName) => {
 
 const SellOrder = () => {
   const [sellOrders, setSellOrders] = useState([]);
+  const [lastChallanNo, setLastChallanNo] = useState("00"); // ✅ new state
   const [editingOrder, setEditingOrder] = useState(null);
   const [editItems, setEditItems] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10)); // YYYY-MM-DD
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const printRefs = useRef({});
 
   useEffect(() => {
@@ -53,11 +54,8 @@ const SellOrder = () => {
         ? Object.keys(data).map((key) => ({ id: key, ...data[key] }))
         : [];
 
-      // Sort by timestamp ascending to assign sequential challan numbers
       formatted.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-      // Assign challan number sequentially per month
-      // Assign challan number sequentially per month
       const monthMap = {};
       const withChallan = formatted.map((order) => {
         const date = new Date(order.timestamp);
@@ -65,7 +63,6 @@ const SellOrder = () => {
         monthMap[monthKey] = (monthMap[monthKey] || 0) + 1;
         const challanNo = monthMap[monthKey].toString().padStart(2, '0');
 
-        // ✅ Store challanNo in Firebase if not already stored
         if (!order.challanNo || order.challanNo !== challanNo) {
           update(ref(db, `sellOrders/${order.id}`), { challanNo });
         }
@@ -73,12 +70,62 @@ const SellOrder = () => {
         return { ...order, challanNo };
       });
 
+      // ✅ Get the last challan number (max challanNo across all)
+      if (withChallan.length > 0) {
+        const maxChallan = Math.max(
+          ...withChallan.map(o => parseInt(o.challanNo, 10) || 0)
+        );
+        setLastChallanNo(maxChallan.toString().padStart(2, "0"));
+        // ✅ also update challanCounter section in Firebase
+        update(ref(db, "challanCounter"), { lastNo: maxChallan });
+      } else {
+        setLastChallanNo("00");
+        update(ref(db, "challanCounter"), { lastNo: 0 });
+      }
 
-      // Sort back descending for display
       withChallan.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       setSellOrders(withChallan);
     });
   }, []);
+  // useEffect(() => {
+  //   const sellOrdersRef = ref(db, "sellOrders");
+
+  //   return onValue(sellOrdersRef, async (snap) => {
+  //     const data = snap.val();
+  //     const formatted = data
+  //       ? Object.keys(data).map((key) => ({ id: key, ...data[key] }))
+  //       : [];
+
+  //     // Sort by timestamp ascending
+  //     formatted.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+  //     let lastNoSnap = await get(ref(db, "challanCounter/lastNo"));
+  //     let nextChallanNo = lastNoSnap.exists() ? lastNoSnap.val() : 0;
+
+  //     const withChallan = [];
+  //     for (const order of formatted) {
+  //       if (!order.challanNo) {
+  //         nextChallanNo += 1;
+
+  //         // ✅ Save challanNo back to this order
+  //         await update(ref(db, `sellOrders/${order.id}`), { challanNo: nextChallanNo });
+
+  //         // ✅ Update challanCounter in Firebase
+  //         await set(ref(db, "challanCounter/lastNo"), nextChallanNo);
+
+  //         withChallan.push({ ...order, challanNo: nextChallanNo });
+  //       } else {
+  //         withChallan.push(order);
+  //       }
+  //     }
+
+  //     // Sort back descending for UI
+  //     withChallan.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  //     setSellOrders(withChallan);
+  //   });
+  // }, []);
+
 
   const handlePrint = async (id) => {
     const content = printRefs.current[id];
@@ -277,6 +324,30 @@ const SellOrder = () => {
     setEditItems(order.items.map(item => ({ ...item })));
   };
 
+  const handleKeyDown = (e, rowIndex, col) => {
+    const cols = ['originalQty', 'soldQty', 'weight', 'less', 'price', 'packet']; // skip 'productName'
+    const currentColIndex = cols.indexOf(col);
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      let nextRow = rowIndex;
+      let nextColIndex = currentColIndex + 1;
+
+      // Move to next row if we are at the last column
+      if (nextColIndex >= cols.length) {
+        nextColIndex = 0;
+        nextRow = rowIndex + 1;
+        if (nextRow >= editItems.length) nextRow = 0; // loop to first row
+      }
+
+      const nextCol = cols[nextColIndex];
+      const nextInput = document.querySelector(
+        `input[data-row="${nextRow}"][data-col="${nextCol}"]`
+      );
+      if (nextInput) nextInput.focus();
+    }
+  };
+
   const handleItemChange = (index, field, value) => {
     const updated = [...editItems];
     updated[index][field] = value;
@@ -305,6 +376,11 @@ const SellOrder = () => {
   return (
     <div className="orderpage-container">
       <h2 style={{ textAlign: 'center' }}>SELL ORDERS</h2>
+
+      <div style={{ textAlign: 'center', marginBottom: '10px', fontSize: '18px' }}>
+        Last Challan No.: <strong>{lastChallanNo}</strong>
+      </div>
+
 
       <div className="date-picker-container">
         <label>Select Date:</label>
@@ -338,10 +414,10 @@ const SellOrder = () => {
                   Print
                 </button>
                 <button
-                  style={{ background: 'red', color: 'white', padding: '5px 10px', marginLeft: '8px' }}
-                  onClick={() => {
-                    const confirmBox = document.createElement("div");
-                    confirmBox.innerHTML = `
+  style={{ background: 'red', color: 'white', padding: '5px 10px', marginLeft: '8px' }}
+  onClick={() => {
+    const confirmBox = document.createElement("div");
+    confirmBox.innerHTML = `
       <div style="
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: rgba(0,0,0,0.6); display: flex;
@@ -366,20 +442,22 @@ const SellOrder = () => {
         </div>
       </div>
     `;
-                    document.body.appendChild(confirmBox);
+    document.body.appendChild(confirmBox);
 
-                    document.getElementById("confirmYes").onclick = () => {
-                      remove(ref(db, `sellOrders/${order.id}`));
-                      document.body.removeChild(confirmBox);
-                    };
+    document.getElementById("confirmYes").onclick = () => {
+      // ✅ Only remove this order, do NOT update challanCounter or other orders
+      remove(ref(db, `sellOrders/${order.id}`));
+      document.body.removeChild(confirmBox);
+    };
 
-                    document.getElementById("confirmNo").onclick = () => {
-                      document.body.removeChild(confirmBox);
-                    };
-                  }}
-                >
-                  Delete
-                </button>
+    document.getElementById("confirmNo").onclick = () => {
+      document.body.removeChild(confirmBox);
+    };
+  }}
+>
+  Delete
+</button>
+
 
 
               </div>
@@ -505,22 +583,81 @@ const SellOrder = () => {
                   <th>Less</th>
                   <th>Price</th>
                   <th>Packet</th>
-                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {editItems.map((item, idx) => (
                   <tr key={idx}>
-                    <td><input value={item.productName} onChange={(e) => handleItemChange(idx, 'productName', e.target.value)} /></td>
-                    <td><input type="number" value={item.originalQty} onChange={(e) => handleItemChange(idx, 'originalQty', e.target.value)} /></td>
-                    <td><input type="number" value={item.soldQty || ''} onChange={(e) => handleItemChange(idx, 'soldQty', e.target.value)} /></td>
-                    <td><input value={item.weight || ''} onChange={(e) => handleItemChange(idx, 'weight', e.target.value)} /></td>
-                    <td><input value={item.less || ''} onChange={(e) => handleItemChange(idx, 'less', e.target.value)} /></td>
-                    <td><input type="number" value={item.price} onChange={(e) => handleItemChange(idx, 'price', e.target.value)} /></td>
-                    <td><input value={item.packet || ''} onChange={(e) => handleItemChange(idx, 'packet', e.target.value)} /></td>
+                    {/* Product name is now read-only */}
+                    <td>
+                      <input
+                        value={item.productName}
+                        readOnly
+                        style={{ backgroundColor: '#f0f0f0', border: '1px solid #ccc' }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={item.originalQty}
+                        data-row={idx}
+                        data-col="originalQty"
+                        onChange={(e) => handleItemChange(idx, 'originalQty', e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(e, idx, 'originalQty')}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={item.soldQty || ''}
+                        data-row={idx}
+                        data-col="soldQty"
+                        onChange={(e) => handleItemChange(idx, 'soldQty', e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(e, idx, 'soldQty')}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        value={item.weight || ''}
+                        data-row={idx}
+                        data-col="weight"
+                        onChange={(e) => handleItemChange(idx, 'weight', e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(e, idx, 'weight')}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        value={item.less || ''}
+                        data-row={idx}
+                        data-col="less"
+                        onChange={(e) => handleItemChange(idx, 'less', e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(e, idx, 'less')}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={item.price}
+                        data-row={idx}
+                        data-col="price"
+                        onChange={(e) => handleItemChange(idx, 'price', e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(e, idx, 'price')}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        value={item.packet || ''}
+                        data-row={idx}
+                        data-col="packet"
+                        onChange={(e) => handleItemChange(idx, 'packet', e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(e, idx, 'packet')}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
+
+
             </table>
             <div style={{ marginTop: '20px', textAlign: 'right' }}>
               <button style={{ background: 'gray', color: 'white', padding: '8px 15px', marginRight: '10px' }} onClick={handleCancel}>Cancel</button>
