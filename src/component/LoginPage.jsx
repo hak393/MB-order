@@ -41,7 +41,7 @@ const Signin = ({ onLogin }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const trimmedUserName = userName.trim().toLowerCase();
+    const trimmedUserName = userName.trim();
     const trimmedPassword = password.trim();
 
     console.log("🖊 Form submitted with:", { trimmedUserName, trimmedPassword });

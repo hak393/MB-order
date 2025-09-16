@@ -284,6 +284,12 @@ const saveEdit = async () => {
   }
 
   // Fetch & increment challanCounter in Firebase
+  
+
+  // Only print + push sellOrders if sold items exist
+  // Only print + push sellOrders if sold items exist
+if (sellItems.length > 0) {
+  // ✅ Fetch & increment challanCounter only when printing
   let newChallanNo = "01";
   try {
     const counterRef = ref(db, 'challanCounter/lastNo');
@@ -298,9 +304,8 @@ const saveEdit = async () => {
     console.error("Error updating challanCounter:", err);
   }
 
-  // Only print + push sellOrders if sold items exist
-  if (sellItems.length > 0) {
-    await printSoldItems(customerName, city, sellItems, phoneNumber, transportName, newChallanNo);
+  await printSoldItems(customerName, city, sellItems, phoneNumber, transportName, newChallanNo);
+
 
     await push(ref(db, 'sellOrders'), {
       user,
@@ -415,10 +420,6 @@ const saveEdit = async () => {
       }
       thead {
         display: table-header-group;
-      }
-      .page-number:after {
-        counter-increment: page;
-        content: "Page " counter(page);
       }
     </style>
   </head>
@@ -636,16 +637,26 @@ if (match && updatedItem.qty) {
   };
 
   // --- New: Edit and Delete for pendingOrderRows ---
-  const startEditPendingRow = (orderKey, item, rowIndex) => {
-    setEditingRow({ orderKey, rowIndex, isPending: true });
-    setEditedItem({ ...item });
-  };
+ const startEditPendingRow = (orderKey, item, rowIndex) => {
+  setEditingRow({ orderKey, rowIndex, isPending: true });
+
+  // Ensure qty shows the packet value (if packet exists) so the edit input behaves like normal rows.
+  setEditedItem({
+    ...item,
+    qty: item.packet !== undefined && item.packet !== null && item.packet !== "" ? item.packet : item.qty,
+    packet: item.packet !== undefined && item.packet !== null && item.packet !== "" ? item.packet : item.qty
+  });
+};
+
   const savePendingRowEdit = async (user, orderId, idx) => {
     const pendingRef = ref(db, `orders/${user}/${orderId}/pendingOrderRows`);
     onValue(pendingRef, async snap => {
       const pendingItems = snap.val();
       if (Array.isArray(pendingItems)) {
         let updatedItem = { ...editedItem };
+        if (updatedItem.qty !== undefined && updatedItem.qty !== null && updatedItem.qty !== "") {
+  updatedItem.packet = updatedItem.qty;
+}
         // ✅ Apply same logic for pending rows
         // ✅ Inside saveRowEdit
 const match = updatedItem.productName?.match(/\((\d+)\s*([a-zA-Z]+)\)/i);
@@ -1359,7 +1370,7 @@ if (match && updatedItem.qty) {
   <input
     type="text"
     inputMode="decimal"
-    value={item.sellQty === 0 ? '' : item.sellQty} // ❌ No leading 0
+    value={item.sellQty ?? ''} // ✅ allows 0
     style={{ width: '80px' }}
     data-row={idx}
     data-col="sellQty"
@@ -1387,7 +1398,7 @@ if (match && updatedItem.qty) {
                 <input
                   type="number"
                   min="0"
-                  value={item.weight || ''}
+                  value={item.weight ?? ''}
                   style={{ width: '70px' }}
                   data-row={idx}
                   data-col="weight"
@@ -1407,7 +1418,7 @@ if (match && updatedItem.qty) {
                 <input
                   type="number"
                   min="0"
-                  value={item.kgRate || ''}
+                  value={item.kgRate ?? ''}
                   style={{ width: '70px' }}
                   data-row={idx}
                   data-col="kgRate"
@@ -1445,11 +1456,12 @@ if (match && updatedItem.qty) {
     <div style={{ display: "flex", alignItems: "center" }}>
       <input
         type="number"
-        value={item.less && item.less.includes("%") ? item.less.replace("%", "") : "0"} // default 0 if empty
+        value={item.less && item.less.includes("%") ? item.less.replace("%", "") : ""}
+ // default 0 if empty
         onChange={e => {
           const up = [...editOrderData.items];
           let val = e.target.value;
-          up[idx].less = val ? val + "%" : "0%"; // append % or default 0%
+          up[idx].less = val !== "" ? parseFloat(val) + "%" : "0%"; // ✅ strips leading 0s
           setEditOrderData({ ...editOrderData, items: up });
         }}
         style={{
@@ -1463,8 +1475,9 @@ if (match && updatedItem.qty) {
         onBlur={e => {
           const up = [...editOrderData.items];
           let val = e.target.value;
-          if (!val) val = "0";
-          if (!val.includes("%")) val += "%";
+          if (val === "") val = "0%";
+else if (!val.includes("%")) val = parseFloat(val) + "%"; // ✅ prevents 045.65
+
           up[idx].less = val;
           setEditOrderData({ ...editOrderData, items: up });
         }}

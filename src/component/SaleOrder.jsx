@@ -641,14 +641,109 @@ const SellOrder = () => {
                       />
                     </td>
                     <td>
-                      <input
-                        value={item.less || ''}
-                        data-row={idx}
-                        data-col="less"
-                        onChange={(e) => handleItemChange(idx, 'less', e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, idx, 'less')}
-                      />
-                    </td>
+  {(item.less?.includes("%") || !item.less) ? (
+    // ✅ Show input + select combo when % or empty
+    <div style={{ display: "flex", alignItems: "center" }}>
+      <input
+        type="number"
+        value={item.less && item.less.includes("%") ? item.less.replace("%", "") : ""}
+        onChange={e => {
+          const up = [...editItems];
+          let val = e.target.value;
+          up[idx].less = val !== "" ? parseFloat(val) + "%" : "0%";
+          setEditItems(up);
+        }}
+        style={{
+          width: "60px",
+          fontSize: "14px",
+          padding: "4px",
+          border: "1px solid #ccc",
+          borderRadius: "4px 0 0 4px",
+          outline: "none"
+        }}
+        onBlur={e => {
+          const up = [...editItems];
+          let val = e.target.value;
+          if (val === "") val = "0%";
+          else if (!val.includes("%")) val = parseFloat(val) + "%";
+          up[idx].less = val;
+          setEditItems(up);
+        }}
+        onKeyDown={e => handleKeyDown(e, idx, "less")}
+      />
+      <select
+        value={
+          ["%", "NET", "Pair", "Full Bill", "Half Bill"].includes(item.less)
+            ? item.less
+            : "%"
+        }
+        onChange={e => {
+          const up = [...editItems];
+          const val = e.target.value;
+          if (val === "%") {
+            if (!up[idx].less || !up[idx].less.includes("%")) {
+              up[idx].less = "0%";
+            }
+          } else {
+            up[idx].less = val;
+          }
+          setEditItems(up);
+        }}
+        style={{
+          fontSize: "14px",
+          padding: "4px",
+          border: "1px solid #ccc",
+          borderLeft: "none",
+          borderRadius: "0 4px 4px 0",
+          backgroundColor: "#f9f9f9",
+          cursor: "pointer",
+          width: "90px"
+        }}
+        onKeyDown={(e) => handleKeyDown(e, idx, 'less')}
+      >
+        <option value="%">%</option>
+        <option value="NET">NET</option>
+        <option value="Pair">Pair</option>
+        <option value="Full Bill">Full Bill</option>
+        <option value="Half Bill">Half Bill</option>
+      </select>
+    </div>
+  ) : (
+    // ✅ Normal select when not %
+    <select
+      value={item.less}
+      onChange={e => {
+        const up = [...editItems];
+        if (e.target.value === "%") {
+          up[idx].less = "0%";
+        } else {
+          up[idx].less = e.target.value;
+        }
+        setEditItems(up);
+      }}
+      style={{
+        width: "120px",
+        fontSize: "14px",
+        padding: "4px",
+        borderRadius: "4px",
+        border: "1px solid #ccc",
+        backgroundColor: "#fff",
+        cursor: "pointer"
+      }}
+      onKeyDown={e => handleKeyDown(e, idx, "less")}
+    >
+      <option value="%">%</option>
+      <option value="NET">NET</option>
+      <option value="Pair">Pair</option>
+      <option value="Full Bill">Full Bill</option>
+      <option value="Half Bill">Half Bill</option>
+      {!["%", "NET", "Pair", "Full Bill", "Half Bill"].includes(item.less) && (
+        <option value={item.less}>{item.less}</option>
+      )}
+    </select>
+  )}
+</td>
+
                     <td>
                       <input
                         type="number"
