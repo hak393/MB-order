@@ -806,10 +806,6 @@ if (match && updatedItem.qty) {
             background-color: #000000ff;
             border-top: 2px solid #000000ff;
           }
-          .page-number:after {
-            counter-increment: page;
-            content: "Page " counter(page);
-          }
       </style>
   </head>
   <body>
