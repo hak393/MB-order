@@ -51,6 +51,11 @@ const UserHandle = () => {
   }, [currentUser, navigate]);
 
   const handleAdd = async () => {
+      if (!username.trim() || !password.trim()) {
+    showAlert("Both Username and Password are required.");
+    return;
+  }
+
     const newUser = `${username}:${password}`;
     if (users.includes(newUser)) {
       showAlert('User already exists.');
@@ -109,6 +114,10 @@ const UserHandle = () => {
   
 
   const handleDelete = async () => {
+      if (!username.trim() || !password.trim()) {
+    showAlert("Both Username and Password are required.");
+    return;
+  }
     const targetUser = `${username}:${password}`;
     if (!users.includes(targetUser)) {
       showAlert('User not found.');
@@ -140,12 +149,13 @@ const UserHandle = () => {
     <div className="user-handle">
       <h2>User Manager</h2>
       <input
-        type="text"
-        placeholder="Username"
-        value={username}
-        onChange={e => setUsername(e.target.value)}
-        className="input-field"
-      /><br />
+  type="text"
+  placeholder="Username"
+  value={username}
+  onChange={e => setUsername(e.target.value)}
+  onKeyDown={(e) => e.key === "Enter" && document.querySelector('input[placeholder="Password"]').focus()}
+  className="input-field"
+/><br />
       <input
         type="password"
         placeholder="Password"

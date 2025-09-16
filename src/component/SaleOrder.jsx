@@ -58,73 +58,88 @@ const SellOrder = () => {
 
       const monthMap = {};
       const withChallan = formatted.map((order) => {
-        const date = new Date(order.timestamp);
-        const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
-        monthMap[monthKey] = (monthMap[monthKey] || 0) + 1;
-        const challanNo = monthMap[monthKey].toString().padStart(2, '0');
+  if (!order.challanNo) {
+    // only assign a challan number if missing
+    const date = new Date(order.timestamp);
+    const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
+    monthMap[monthKey] = (monthMap[monthKey] || 0) + 1;
+    const challanNo = monthMap[monthKey].toString().padStart(2, '0');
 
-        if (!order.challanNo || order.challanNo !== challanNo) {
-          update(ref(db, `sellOrders/${order.id}`), { challanNo });
-        }
+    update(ref(db, `sellOrders/${order.id}`), { challanNo });
+    return { ...order, challanNo };
+  }
 
-        return { ...order, challanNo };
-      });
+  // ✅ keep existing challan number
+  return order;
+});
+
 
       // ✅ Get the last challan number (max challanNo across all)
       if (withChallan.length > 0) {
-        const maxChallan = Math.max(
-          ...withChallan.map(o => parseInt(o.challanNo, 10) || 0)
-        );
-        setLastChallanNo(maxChallan.toString().padStart(2, "0"));
-        // ✅ also update challanCounter section in Firebase
-        update(ref(db, "challanCounter"), { lastNo: maxChallan });
-      } else {
-        setLastChallanNo("00");
-        update(ref(db, "challanCounter"), { lastNo: 0 });
-      }
+  const maxChallan = Math.max(
+    ...withChallan.map(o => parseInt(o.challanNo, 10) || 0)
+  );
+  setLastChallanNo(maxChallan.toString().padStart(2, "0"));
+  // ✅ also update challanCounter section in Firebase
+  update(ref(db, "challanCounter"), { lastNo: maxChallan });
+} else {
+  setLastChallanNo("00");
+  // ✅ when last challan is zero, update challanCounter in Firebase too
+  update(ref(db, "challanCounter"), { lastNo: 0 });
+}
+
 
       withChallan.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       setSellOrders(withChallan);
     });
   }, []);
-  // useEffect(() => {
-  //   const sellOrdersRef = ref(db, "sellOrders");
 
-  //   return onValue(sellOrdersRef, async (snap) => {
-  //     const data = snap.val();
-  //     const formatted = data
-  //       ? Object.keys(data).map((key) => ({ id: key, ...data[key] }))
-  //       : [];
 
-  //     // Sort by timestamp ascending
-  //     formatted.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+//   useEffect(() => {
+//   const sellOrdersRef = ref(db, "sellOrders");
+//   return onValue(sellOrdersRef, (snap) => {
+//     const data = snap.val();
+//     const formatted = data
+//       ? Object.keys(data).map((key) => ({ id: key, ...data[key] }))
+//       : [];
 
-  //     let lastNoSnap = await get(ref(db, "challanCounter/lastNo"));
-  //     let nextChallanNo = lastNoSnap.exists() ? lastNoSnap.val() : 0;
+//     formatted.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-  //     const withChallan = [];
-  //     for (const order of formatted) {
-  //       if (!order.challanNo) {
-  //         nextChallanNo += 1;
+//     const dayMap = {}; // 🔥 reset per day
+//     const withChallan = formatted.map((order) => {
+//       if (!order.challanNo) {
+//         const date = new Date(order.timestamp);
+//         const dayKey = date.toISOString().slice(0, 10); // e.g. "2025-09-15"
 
-  //         // ✅ Save challanNo back to this order
-  //         await update(ref(db, `sellOrders/${order.id}`), { challanNo: nextChallanNo });
+//         dayMap[dayKey] = (dayMap[dayKey] || 0) + 1;
+//         const challanNo = dayMap[dayKey].toString().padStart(2, "0");
 
-  //         // ✅ Update challanCounter in Firebase
-  //         await set(ref(db, "challanCounter/lastNo"), nextChallanNo);
+//         update(ref(db, `sellOrders/${order.id}`), { challanNo });
+//         return { ...order, challanNo };
+//       }
 
-  //         withChallan.push({ ...order, challanNo: nextChallanNo });
-  //       } else {
-  //         withChallan.push(order);
-  //       }
-  //     }
+//       return order; // ✅ keep existing challanNo
+//     });
 
-  //     // Sort back descending for UI
-  //     withChallan.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+//     // ✅ get today’s challan max
+//     const todayKey = new Date().toISOString().slice(0, 10);
+//     const todayOrders = withChallan.filter(
+//       (o) => new Date(o.timestamp).toISOString().slice(0, 10) === todayKey
+//     );
+//     if (todayOrders.length > 0) {
+//       const maxChallan = Math.max(
+//         ...todayOrders.map((o) => parseInt(o.challanNo, 10) || 0)
+//       );
+//       setLastChallanNo(maxChallan.toString().padStart(2, "0"));
+// } else {
+//   setLastChallanNo("00");
+//   update(ref(db, "challanCounter"), { lastNo: 0 });  // ⬅ add this line
+// }
 
-  //     setSellOrders(withChallan);
-  //   });
-  // }, []);
+//     withChallan.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+//     setSellOrders(withChallan);
+//   });
+// }, []);
 
 
   const handlePrint = async (id) => {

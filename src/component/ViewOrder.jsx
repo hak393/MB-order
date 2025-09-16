@@ -317,7 +317,8 @@ const saveEdit = async () => {
         weight: i.weight,
         price: i.price,
         less: i.less,
-        packet: i.packet || ''
+        packet: i.packet || '',
+        kgrate: i.kgrate || ''   // ✅ added here
       }))
     });
 
@@ -356,6 +357,7 @@ const saveEdit = async () => {
       price: i.price,
       less: i.less || '',
       packet: i.packet || '',
+      kgrate: i.kgrate || '',   // ✅ added here
       timestamp: new Date().toISOString()
     });
   }
