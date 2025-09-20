@@ -659,10 +659,36 @@ setLessUnit(
   onChange={e => {
     setLessUnit(e.target.value);
   }}
+  onKeyDown={e => {
+    // Handle Shift+Tab directly so browser/default focus change doesn't get overridden
+    if (e.key === 'Tab' && e.shiftKey) {
+      e.preventDefault();
+      const focusable = Array.from(
+        document.querySelectorAll('input, select, textarea, button')
+      ).filter(el => !el.disabled && el.type !== 'hidden');
+
+      const idx = focusable.indexOf(e.target);
+      focusable[idx - 1]?.focus();
+    }
+  }}
   onBlur={e => {
-    // Trigger next focus when leaving the select (after selection)
+    // If focus already moved backward (Shift+Tab), skip simulating Enter
+    const focusable = Array.from(
+      document.querySelectorAll('input, select, textarea, button')
+    ).filter(el => !el.disabled && el.type !== 'hidden');
+
+    const newIndex = focusable.indexOf(document.activeElement);
+    const currentIndex = focusable.indexOf(e.target);
+
+    if (newIndex < currentIndex) {
+      // focus moved to a previous element — do nothing
+      return;
+    }
+
+    // otherwise keep previous behavior (simulate Enter)
     handleKeyDown({
       key: "Enter",
+      shiftKey: false,
       preventDefault: () => {},
       target: e.target
     });

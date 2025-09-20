@@ -143,194 +143,194 @@ const SellOrder = () => {
 
 
   const handlePrint = async (id) => {
-    const content = printRefs.current[id];
-    if (!content) return;
+  const content = printRefs.current[id];
+  if (!content) return;
+  const printCopies = ["Original Copy", "Duplicate Copy"];
 
-    // ✅ Find the order object from state
-    const order = sellOrders.find(o => o.id === id);
+  // ✅ Find the order object from state
+  const order = sellOrders.find(o => o.id === id);
 
-    // ✅ Extract customer name & city from header
-    const headerDiv = content.querySelector(".order-header");
-    const headerText = headerDiv.innerHTML
-      .replace(/<strong>User:<\/strong>.*?<br\s*\/?>/i, ""); // remove User
+  // ✅ Extract customer name & city from header
+  const headerDiv = content.querySelector(".order-header");
+  const headerText = headerDiv.innerHTML
+    .replace(/<strong>User:<\/strong>.*?<br\s*\/?>/i, ""); // remove User
 
-    const customerMatch = headerText.match(/<strong>Customer:<\/strong>\s*([^<]+)<br\s*\/?>/i);
-    const cityMatch = headerText.match(/<strong>City:<\/strong>\s*([^<]+)<br\s*\/?>/i);
+  const customerMatch = headerText.match(/<strong>Customer:<\/strong>\s*([^<]+)<br\s*\/?>/i);
+  const cityMatch = headerText.match(/<strong>City:<\/strong>\s*([^<]+)<br\s*\/?>/i);
 
-    const customerName = customerMatch ? customerMatch[1].trim() : "";
-    const city = cityMatch ? cityMatch[1].trim() : "";
+  const customerName = customerMatch ? customerMatch[1].trim() : "";
+  const city = cityMatch ? cityMatch[1].trim() : "";
 
-    // ✅ Fetch phone number from Firebase
-    let phoneNumber = "-";
-    try {
-      const customersRef = ref(db, "customers");
-      const snap = await get(customersRef);
-      if (snap.exists()) {
-        const customers = snap.val();
-        const found = Object.values(customers).find(
-          (c) => c.name === customerName && c.city === city
-        );
-        if (found?.number) phoneNumber = found.number;
-      }
-    } catch (err) {
-      console.error("Error fetching phone:", err);
+  // ✅ Fetch phone number from Firebase
+  let phoneNumber = "-";
+  try {
+    const customersRef = ref(db, "customers");
+    const snap = await get(customersRef);
+    if (snap.exists()) {
+      const customers = snap.val();
+      const found = Object.values(customers).find(
+        (c) => c.name === customerName && c.city === city
+      );
+      if (found?.number) phoneNumber = found.number;
     }
+  } catch (err) {
+    console.error("Error fetching phone:", err);
+  }
 
-    // ✅ Insert phone after city
-    // ✅ Build header HTML with Customer on first row, City (right) and Date (left) on second row
-    // ✅ Fetch transport name from Firebase sellOrders
-    let transportName = "-";
-    try {
-      const ordersRef = ref(db, "sellOrders");
-      const snap = await get(ordersRef);
-      if (snap.exists()) {
-        const orders = snap.val();
-        const foundOrder = Object.values(orders).find(
-          (o) => o.customerName === customerName && o.city === city
-        );
-        if (foundOrder?.transportName) transportName = foundOrder.transportName;
-      }
-    } catch (err) {
-      console.error("Error fetching transport name:", err);
+  // ✅ Fetch transport name from Firebase sellOrders
+  let transportName = "-";
+  try {
+    const ordersRef = ref(db, "sellOrders");
+    const snap = await get(ordersRef);
+    if (snap.exists()) {
+      const orders = snap.val();
+      const foundOrder = Object.values(orders).find(
+        (o) => o.customerName === customerName && o.city === city
+      );
+      if (foundOrder?.transportName) transportName = foundOrder.transportName;
     }
+  } catch (err) {
+    console.error("Error fetching transport name:", err);
+  }
 
-    // ✅ Build header HTML
-    const today = new Date();
-    const formattedDate = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
+  // ✅ Build header HTML
+  const today = new Date();
+  const formattedDate = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
 
-    const headerHTML = `
-  <div style="display:flex; justify-content:space-between; width:100%; font-size:20px;">
-    <div><strong>Customer:</strong> ${customerName}</div>
-    <div><strong>Challan No.:</strong> ${order.challanNo || '-'}</div>
-  </div>
-  <div style="display:flex; justify-content:space-between; width:100%; font-size:20px;">
-    <div><strong>City:</strong> ${city}</div>
-    <div><strong>Date:</strong> ${formattedDate}</div>
-  </div>
-  <div style="display:flex; justify-content:space-between; width:100%; font-size:12px; margin-top:5px;">
-    <div><strong>Phone:</strong> ${phoneNumber}</div>
-    <div><strong>Transport:</strong> ${transportName}</div>
-  </div>
-`;
+  const headerHTML = `
+    <div style="display:flex; justify-content:space-between; width:100%; font-size:20px;">
+      <div><strong>Customer:</strong> ${customerName}</div>
+      <div><strong>Challan No.:</strong> ${order.challanNo || '-'}</div>
+    </div>
+    <div style="display:flex; justify-content:space-between; width:100%; font-size:20px;">
+      <div><strong>City:</strong> ${city}</div>
+      <div><strong>Date:</strong> ${formattedDate}</div>
+    </div>
+    <div style="display:flex; justify-content:space-between; width:100%; font-size:12px; margin-top:5px;">
+      <div><strong>Phone:</strong> ${phoneNumber}</div>
+      <div><strong>Transport:</strong> ${transportName}</div>
+    </div>
+  `;
 
+  // ✅ Build table rows
+  const rows = Array.from(content.querySelectorAll("tbody tr"));
+  const tbodyHTML = rows
+    .map((row, idx) => {
+      const cells = row.querySelectorAll("td");
+      if (cells.length < 6) return "";
 
+      const product = cells[0].innerHTML.replace(/\s*\(.*?\)/g, "").trim();
+      const soldQty = cells[1].innerHTML;
+      const weight = cells[2].innerHTML;
+      const less = cells[3].innerHTML.replace(/₹/g, "");
+      const price = cells[4].innerHTML.replace(/₹/g, "");
+      const packet = cells[5].innerHTML;
 
-    // ✅ Build table rows: add Sr No + swap Price and Less column data
-    const rows = Array.from(content.querySelectorAll("tbody tr"));
-    const tbodyHTML = rows
-      .map((row, idx) => {
-        const cells = row.querySelectorAll("td");
-        if (cells.length < 6) return "";
+      return `<tr>
+        <td>${idx + 1}</td>
+        <td>${product}</td>
+        <td>${soldQty}</td>
+        <td>${weight}</td>
+        <td>${price}</td>
+        <td>${less}</td>
+        <td>${packet}</td>
+      </tr>`;
+    })
+    .join("");
 
-        // Remove quantity info from product
-        // ✅ Remove anything in parentheses from product name
-        const product = cells[0].innerHTML.replace(/\s*\(.*?\)/g, "").trim();
-        const soldQty = cells[1].innerHTML;
-        const weight = cells[2].innerHTML;
-        const less = cells[3].innerHTML.replace(/₹/g, "");   // remove ₹
-        const price = cells[4].innerHTML.replace(/₹/g, "");  // remove ₹
-        const packet = cells[5].innerHTML;
+  const printWindow = window.open("", "", "width=900,height=650");
+  if (!printWindow) {
+    alert("Popup blocked! Please allow popups for this site.");
+    return;
+  }
 
-        return `<tr>
-      <td>${idx + 1}</td>
-      <td>${product}</td>
-      <td>${soldQty}</td>
-      <td>${weight}</td>
-      <td>${price}</td>   <!-- ✅ swapped -->
-      <td>${less}</td>    <!-- ✅ swapped -->
-      <td>${packet}</td>
-    </tr>`;
-      })
-      .join("");
-
-
-    const printWindow = window.open("", "", "width=900,height=650");
-    printWindow.document.write(`
+  printWindow.document.write(`
     <html>
       <head>
         <title>Packing Slip</title>
         <style>
-         @page {
-  size: A5 landscape;  /* change from 'size: A5;' */
-  margin: 10mm;
-}
-
-          body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-            transform: scale(0.85);
-            transform-origin: top left;
-            counter-reset: page;
-          }
-          h2 {
-            text-align: center;
-            margin-bottom: 10px;
-          }
-          .order-header {
-            margin-bottom: 15px;
-            font-size: 14px;
-            line-height: 1.5;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-            font-size: 12px;
-          }
-          th, td {
-            border: 1px solid #000;
-            padding: 6px;
-            text-align: center;
-          }
-          thead {
-            display: table-header-group;
-          }
-          .pending-row {
-            font-weight: bold;
-            font-style: italic;
-            text-transform: uppercase;
-            background-color: #f9f9f9;
-            border-top: 2px solid #ccc;
-          }
+          @page { size: A5 landscape; margin: 10mm; }
+          thead { display: table-header-group; }
+          body { font-family: Arial, sans-serif; padding: 20px; transform: scale(0.85); transform-origin: top left; counter-reset: page; }
+          h2 { text-align: center; margin-bottom: 5px; }
+          .copy-title { text-align:center; font-size:14px; font-weight:bold; margin-bottom:10px; }
+          .order-header { margin-bottom: 15px; font-size: 14px; line-height: 1.5; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+          th, td { border: 1px solid #000; padding: 6px; text-align: center; }
+          /* ✅ Restored page numbering */
+          .page-number:after { counter-increment: page; content: "Page " counter(page); }
         </style>
       </head>
       <body>
+        <!-- Original Copy -->
+        <div class="copy-title">Original Copy</div>
         <table>
           <thead>
             <tr>
-              <th colspan="7" style="text-align:right;">
-              <h2>PACKING SLIP</h2>
-                <span class="page-number"></span>
+              <th colspan="7" style="text-align:center;">
+                <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
+                  <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
+                  <span class="page-number" style="position:absolute; right:0;"></span>
+                </div>
               </th>
             </tr>
             <tr>
-              <th colspan="7">
-                <div class="order-header">
-                  ${headerHTML}
-                </div>
-              </th>
+              <th colspan="7"><div class="order-header">${headerHTML}</div></th>
             </tr>
             <tr>
               <th>Sr No.</th>
               <th>Product</th>
               <th>Qty</th>
               <th>Weight</th>
-              <th>Price</th>   <!-- ✅ swapped -->
-              <th>Less</th>    <!-- ✅ swapped -->
+              <th>Price</th>
+              <th>Less</th>
               <th>Packet</th>
             </tr>
           </thead>
-          <tbody>
-            ${tbodyHTML}
-          </tbody>
+          <tbody>${tbodyHTML}</tbody>
+        </table>
+
+        <div style="page-break-before: always;"></div>
+
+        <!-- Duplicate Copy -->
+        <div class="copy-title">Duplicate Copy</div>
+        <table>
+          <thead>
+            <tr>
+              <th colspan="7" style="text-align:center;">
+                <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
+                  <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
+                  <span class="page-number" style="position:absolute; right:0;"></span>
+                </div>
+              </th>
+            </tr>
+            <tr>
+              <th colspan="7"><div class="order-header">${headerHTML}</div></th>
+            </tr>
+            <tr>
+              <th>Sr No.</th>
+              <th>Product</th>
+              <th>Qty</th>
+              <th>Weight</th>
+              <th>Price</th>
+              <th>Less</th>
+              <th>Packet</th>
+            </tr>
+          </thead>
+          <tbody>${tbodyHTML}</tbody>
         </table>
       </body>
+      <script>
+        window.onload = () => {
+          window.print();
+          window.onafterprint = () => window.close();
+        };
+      </script>
     </html>
   `);
 
-    printWindow.document.close();
-    printWindow.print();
-  };
+  printWindow.document.close();
+};
 
 
 

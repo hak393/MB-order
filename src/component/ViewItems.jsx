@@ -178,18 +178,27 @@ const showAlert = (message, type = "error") => {
 
 // Save updated data
 // Save updated data
+// Save updated data
 const handleSave = async (id) => {
- if (!editField1.trim() || !editField2.trim() || !editField3.trim()) {
-  showAlert('Fields cannot be empty');
-  return;
-}
-if (!/^\d{10}$/.test(editField3)) {
-  showAlert('Number must be exactly 10 digits');
-  return;
-}
+  if (selectedOption === 'customer') {
+    if (!editField1.trim() || !editField2.trim() || !editField3.trim()) {
+      showAlert('Fields cannot be empty');
+      return;
+    }
+    if (!/^\d{10}$/.test(editField3)) {
+      showAlert('Number must be exactly 10 digits');
+      return;
+    }
+  } else {
+    if (!editField1.trim() || !editField2.trim()) {
+      showAlert('Fields cannot be empty');
+      return;
+    }
+  }
 
   const path = selectedOption === 'customer' ? 'customers' : 'products';
   let updateData;
+  // ... rest of your logic remains unchanged
 
 if (selectedOption === 'customer') {
   // ✅ Get old values before updating

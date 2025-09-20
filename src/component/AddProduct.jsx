@@ -57,7 +57,7 @@ const AddProduct = () => {
   };
 
   // Add customer
-    // Add customer
+  // Add customer
   const handleAddCustomer = () => {
     if (!customerName.trim() || !city.trim() || !customerNumber.trim()) {
       setPopup({ show: true, message: 'Please enter customer name, city, and number!' });
@@ -131,49 +131,6 @@ const AddProduct = () => {
 
       {/* Wrap in form to support Enter-as-Tab navigation */}
       <form>
-        {/* Customer Section */}
-        <div className="section-block">
-          <h3>Add Customer with City and Number</h3>
-          <input
-            type="text"
-            value={customerName}
-            onChange={e => setCustomerName(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Enter customer name"
-          /><br />
-          <input
-            type="text"
-            value={city}
-            onChange={e => setCity(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Enter city"
-            style={{ marginTop: '10px' }}
-          /><br />
-          <input
-            type="tel"
-            value={customerNumber}
-            onChange={(e) => {
-              let value = e.target.value.replace(/\D/g, '');
-              if (value.length > 10) value = value.slice(0, 10);
-              setCustomerNumber(value);
-            }}
-            onKeyDown={handleKeyDown}
-            placeholder="Customer Number"
-            style={{ marginTop: '10px' }}
-          /><br />
-
-          <button
-            type="button"
-            className="btn-manual"
-            onClick={handleAddCustomer}
-            style={{ marginTop: '10px' }}
-          >
-            Save Customer
-          </button>
-        </div>
-
-        <hr style={{ margin: '30px 0' }} />
-
         {/* Product Section */}
         <div className="section-block">
           <h3>Add Product</h3>
@@ -213,25 +170,25 @@ const AddProduct = () => {
 
           {/* Unit Dropdown */}
           <select
-  value={unit}
-  onChange={(e) => setUnit(e.target.value)}
-  style={{
-    marginTop: "10px",
-    marginLeft: "10px",
-    padding: "5px 10px",
-    fontSize: "15px",
-    borderRadius: "6px",
-    minWidth: "10px",
-  }}
->
-  <option value="pcs">pcs</option>
-  <option value="pk">pk</option>
-  <option value="pair">pair</option>
-  <option value="set">set</option>
-  <option value="grs">grs</option>
-</select>
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+            style={{
+              marginTop: "10px",
+              marginLeft: "10px",
+              padding: "5px 10px",
+              fontSize: "15px",
+              borderRadius: "6px",
+              minWidth: "10px",
+            }}
+          >
+            <option value="pcs">pcs</option>
+            <option value="pk">pk</option>
+            <option value="pair">pair</option>
+            <option value="set">set</option>
+            <option value="grs">grs</option>
+          </select>
 
-<br />
+          <br />
 
 
           {/* Save Product Button */}
@@ -254,6 +211,48 @@ const AddProduct = () => {
               This product with the same quantity already exists!
             </div>
           )}
+        </div>
+        <hr style={{ margin: '30px 0' }} />
+
+        {/* Customer Section */}
+        <div className="section-block">
+          <h3>Add Customer with City and Number</h3>
+          <input
+            type="text"
+            value={customerName}
+            onChange={e => setCustomerName(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Enter customer name"
+          /><br />
+          <input
+            type="text"
+            value={city}
+            onChange={e => setCity(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Enter city"
+            style={{ marginTop: '10px' }}
+          /><br />
+          <input
+            type="tel"
+            value={customerNumber}
+            onChange={(e) => {
+              let value = e.target.value.replace(/\D/g, '');
+              if (value.length > 10) value = value.slice(0, 10);
+              setCustomerNumber(value);
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder="Customer Number"
+            style={{ marginTop: '10px' }}
+          /><br />
+
+          <button
+            type="button"
+            className="btn-manual"
+            onClick={handleAddCustomer}
+            style={{ marginTop: '10px' }}
+          >
+            Save Customer
+          </button>
         </div>
       </form>
     </div>
