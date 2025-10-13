@@ -1508,7 +1508,7 @@ const printSoldItems = (customerName, city, sold, phoneNumber, transportName, ch
                             onChange={e => {
                               const up = [...editOrderData.items];
                               let val = e.target.value;
-                              up[idx].less = val !== "" ? parseFloat(val) + "%" : "0%"; // ✅ strips leading 0s
+                              up[idx].less = val !== "" ? `${val}%` : "0%"; // ✅ strips leading 0s
                               setEditOrderData({ ...editOrderData, items: up });
                             }}
                             style={{

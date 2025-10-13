@@ -213,43 +213,44 @@ updateData = { name: editField1, city: editField2, number: editField3 }; // 🔹
 await update(ref(database, `${path}/${id}`), updateData);
 
 
-    // 2️⃣ Update in sellOrders
-    const sellOrdersSnap = await get(ref(database, 'sellOrders'));
-    if (sellOrdersSnap.exists()) {
-      const updates = {};
-      const sellOrders = sellOrdersSnap.val();
+    // ✅ Update in sellOrders
+const sellOrdersSnap = await get(ref(database, 'sellOrders'));
+if (sellOrdersSnap.exists()) {
+  const updates = {};
+  const sellOrders = sellOrdersSnap.val();
 
-      Object.keys(sellOrders).forEach((orderId) => {
-        const order = sellOrders[orderId];
-        if (order.customerName === oldName || order.city === oldCity) {
-          updates[`sellOrders/${orderId}/customerName`] = editField1;
-          updates[`sellOrders/${orderId}/city`] = editField2;
-        }
-      });
-
-      if (Object.keys(updates).length > 0) {
-        await update(ref(database), updates);
-      }
+  Object.keys(sellOrders).forEach((orderId) => {
+    const order = sellOrders[orderId];
+    if (order.customerName === oldName && order.city === oldCity) {
+      updates[`sellOrders/${orderId}/customerName`] = editField1;
+      updates[`sellOrders/${orderId}/city`] = editField2;
     }
+  });
 
-    // 3️⃣ Update in pendingOrders
-    const pendingOrdersSnap = await get(ref(database, 'pendingOrders'));
-    if (pendingOrdersSnap.exists()) {
-      const updates = {};
-      const pendingOrders = pendingOrdersSnap.val();
+  if (Object.keys(updates).length > 0) {
+    await update(ref(database), updates);
+  }
+}
 
-      Object.keys(pendingOrders).forEach((orderId) => {
-        const order = pendingOrders[orderId];
-        if (order.customerName === oldName || order.city === oldCity) {
-          updates[`pendingOrders/${orderId}/customerName`] = editField1;
-          updates[`pendingOrders/${orderId}/city`] = editField2;
-        }
-      });
+// ✅ Update in pendingOrders
+const pendingOrdersSnap = await get(ref(database, 'pendingOrders'));
+if (pendingOrdersSnap.exists()) {
+  const updates = {};
+  const pendingOrders = pendingOrdersSnap.val();
 
-      if (Object.keys(updates).length > 0) {
-        await update(ref(database), updates);
-      }
+  Object.keys(pendingOrders).forEach((orderId) => {
+    const order = pendingOrders[orderId];
+    if (order.customerName === oldName && order.city === oldCity) {
+      updates[`pendingOrders/${orderId}/customerName`] = editField1;
+      updates[`pendingOrders/${orderId}/city`] = editField2;
     }
+  });
+
+  if (Object.keys(updates).length > 0) {
+    await update(ref(database), updates);
+  }
+}
+
 
   } else {
     // ✅ recombine name + qty into single string for Firebase

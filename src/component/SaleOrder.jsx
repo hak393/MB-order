@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getDatabase, ref, onValue, update, get, remove } from 'firebase/database'; // ⬅ added get
+import { getDatabase, ref, onValue, update, get, remove, push} from 'firebase/database'; // ⬅ added get
 import './Style.css';
 
 const firebaseConfig = { databaseURL: 'https://mb-order-3764e-default-rtdb.firebaseio.com/' };
@@ -194,8 +194,13 @@ const SellOrder = () => {
   }
 
   // ✅ Build header HTML
-  const today = new Date();
-  const formattedDate = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
+  const orderDate = order.timestamp || order.date || order.createdAt || ""; 
+let formattedDate = "-";
+
+if (orderDate) {
+  const d = new Date(orderDate);
+  formattedDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+}
 
   const headerHTML = `
     <div style="display:flex; justify-content:space-between; width:100%; font-size:20px;">
@@ -369,14 +374,49 @@ const SellOrder = () => {
     setEditItems(updated);
   };
 
-  const handleSave = () => {
-    if (!editingOrder) return;
-    const orderRef = ref(db, `sellOrders/${editingOrder.id}`);
-    update(orderRef, { items: editItems }).then(() => {
-      setEditingOrder(null);
-      setEditItems([]);
-    });
-  };
+const handleSave = async () => {
+  if (!editingOrder) return;
+
+  const orderRef = ref(db, `sellOrders/${editingOrder.id}`);
+
+  // Loop through edited items and check qty changes
+  for (let i = 0; i < editItems.length; i++) {
+    const item = editItems[i];
+    const oldQty = editingOrder.items[i]?.soldQty || 0; // old sold qty
+    const newQty = parseFloat(item.soldQty) || 0;
+
+    // ✅ If qty reduced, move difference to pendingOrders
+    if (newQty < oldQty) {
+      const remainingQty = oldQty - newQty;
+
+      const pendingData = {
+        city: editingOrder.city,
+        customerName: editingOrder.customerName,
+        kgrate: "",
+        less: item.less || "",
+        packet: "",
+        price: item.price || "",
+        productName: item.productName || "",
+        remainingQty: remainingQty,
+        soldQty: 0,
+        timestamp: new Date().toISOString(),
+        unit: item.unit || "",
+        user: editingOrder.user || ""
+      };
+
+      // ✅ Push remaining as new pending order
+      await push(ref(db, "pendingOrders"), pendingData);
+    }
+  }
+
+  // ✅ Now update the main sellOrder with new soldQty values
+  await update(orderRef, { items: editItems });
+
+  // ✅ Close editor
+  setEditingOrder(null);
+  setEditItems([]);
+};
+
 
   const handleCancel = () => {
     setEditingOrder(null);
@@ -485,7 +525,20 @@ const SellOrder = () => {
                   <strong>Customer:</strong> {order.customerName} <br />
                   <strong>City:</strong> {order.city} <br />
                   <strong>Transport:</strong> {order.transportName || '-'} <br />
-                  <strong>Date:</strong> {new Date(order.timestamp).toLocaleString()}
+                  <strong>Date:</strong> {(() => {
+  const d = new Date(order.timestamp);
+  const day = d.getDate().toString().padStart(2,'0');
+  const month = (d.getMonth() + 1).toString().padStart(2,'0');
+  const year = d.getFullYear();
+  
+  let hours = d.getHours();
+  const minutes = d.getMinutes().toString().padStart(2,'0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  if (hours === 0) hours = 12;
+
+  return `${day}/${month}/${year} ${hours}:${minutes} ${ampm}`;
+})()}
                 </div>
               </div>
               <table>
