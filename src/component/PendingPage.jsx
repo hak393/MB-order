@@ -284,7 +284,7 @@ const formatTimestamp = (timestamp) => {
           value={editValues.less && editValues.less.includes("%") ? editValues.less.replace("%", "") : "0"}
           onChange={e => {
             let val = e.target.value;
-            setEditValues({ ...editValues, less: val ? val + "%" : "0%" });
+            setEditValues({ ...editValues, less: val ? val + "%" : "%" });
           }}
           style={{
             width: "60px",
@@ -299,7 +299,7 @@ const formatTimestamp = (timestamp) => {
           value={["%", "NET", "Pair", "Full Bill", "Half Bill"].includes(editValues.less) ? editValues.less : "%"}
           onChange={e => {
             const val = e.target.value;
-            setEditValues({ ...editValues, less: val === "%" ? "0%" : val });
+            setEditValues({ ...editValues, less: val === "%" ? "%" : val });
           }}
           style={{
             fontSize: "14px",
