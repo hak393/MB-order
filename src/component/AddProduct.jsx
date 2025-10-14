@@ -206,6 +206,8 @@ const AddProduct = () => {
             Save Product
           </button>
 
+          
+
           {isDuplicate && (
             <div style={{ color: 'red', marginTop: '5px' }}>
               This product with the same quantity already exists!

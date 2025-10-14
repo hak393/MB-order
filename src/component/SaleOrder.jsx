@@ -698,32 +698,33 @@ const handleSave = async () => {
     // ✅ Show input + select combo when % or empty
     <div style={{ display: "flex", alignItems: "center" }}>
       <input
-        type="number"
-        value={item.less && item.less.includes("%") ? item.less.replace("%", "") : ""}
-        onChange={e => {
-          const up = [...editItems];
-          let val = e.target.value;
-          up[idx].less = val !== "" ? parseFloat(val) + "%" : "0%";
-          setEditItems(up);
-        }}
-        style={{
-          width: "60px",
-          fontSize: "14px",
-          padding: "4px",
-          border: "1px solid #ccc",
-          borderRadius: "4px 0 0 4px",
-          outline: "none"
-        }}
-        onBlur={e => {
-          const up = [...editItems];
-          let val = e.target.value;
-          if (val === "") val = "0%";
-          else if (!val.includes("%")) val = parseFloat(val) + "%";
-          up[idx].less = val;
-          setEditItems(up);
-        }}
-        onKeyDown={e => handleKeyDown(e, idx, "less")}
-      />
+  type="number"
+  value={item.less && item.less.includes("%") ? item.less.replace("%", "") : ""}
+  onChange={e => {
+    const up = [...editItems];
+    let val = e.target.value;
+    up[idx].less = val !== "" ? `${val}%` : "%";   // ✅ FIXED HERE
+    setEditItems(up);
+  }}
+  style={{
+    width: "60px",
+    fontSize: "14px",
+    padding: "4px",
+    border: "1px solid #ccc",
+    borderRadius: "4px 0 0 4px",
+    outline: "none"
+  }}
+  onBlur={e => {
+    const up = [...editItems];
+    let val = e.target.value;
+    if (val === "") val = "%";
+    else if (!val.includes("%")) val = `${val}%`;   // ✅ FIXED HERE
+    up[idx].less = val;
+    setEditItems(up);
+  }}
+  onKeyDown={e => handleKeyDown(e, idx, "less")}
+/>
+
       <select
         value={
           ["%", "NET", "Pair", "Full Bill", "Half Bill"].includes(item.less)
