@@ -325,7 +325,7 @@ const ViewOrder = () => {
           price: i.price,
           less: i.less,
           packet: i.packet || '',
-          kgrate: i.kgrate || ''   // ✅ added here
+          kgRate: i.kgRate || ''
         }))
       });
 
@@ -390,7 +390,7 @@ const printSoldItems = (customerName, city, sold, phoneNumber, transportName, ch
         <td>${idx + 1}</td>
         <td>${cleanProductName(i.productName)}</td>
         <td>${i.soldQty} ${i.unit || ""}</td>
-        <td>${i.weight || '-'}</td>
+        <td>${i.weight ? parseFloat(i.weight).toFixed(3) : '-'}</td>
         <td>${i.price}</td>
         <td>${typeof i.less === 'number' || (typeof i.less === 'string' && !isNaN(Number(i.less)))
           ? i.less + '%'
@@ -428,30 +428,35 @@ const printSoldItems = (customerName, city, sold, phoneNumber, transportName, ch
   <head>
     <title>Packing Slip</title>
     <style>
-      @page { size: A5 landscape; margin: 10mm; }
-      body { font-family: Arial, sans-serif; padding: 20px; transform: scale(0.85); transform-origin: top left; counter-reset: page; }
-      thead { display: table-header-group; }
-      h2 { text-align: center; margin-bottom: 5px; }
-      .copy-title { text-align:center; font-size:14px; font-weight:bold; margin-bottom:10px; }
-      .order-header { margin-bottom: 15px; font-size: 14px; line-height: 1.5; }
-      table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
-      th, td { border: 1px solid #000; padding: 6px; text-align: center; }
-      .page-number:after { counter-increment: page; content: "Page " counter(page); }
-    </style>
+  @page { size: A5 landscape; margin: 10mm; }
+  thead { display: table-header-group; }
+  body { font-family: Arial, sans-serif; padding: 20px; transform: scale(0.85); transform-origin: top left; }
+  h2 { text-align: center; margin-bottom: 5px; }
+  .copy-title { text-align:center; font-size:14px; font-weight:bold; margin-bottom:10px; }
+  .order-header { margin-bottom: 15px; font-size: 14px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+  th, td { border: 1px solid #000; padding: 6px; text-align: center; }
+  /* ✅ Original Copy page numbering */
+  .original .page-number:after { counter-increment: page; content: "Page " counter(page); }
+  /* ✅ Duplicate Copy uses same page number as original */
+  .duplicate .page-number:after { content: attr(data-page); }
+</style>
+
   </head>
   <body>
     <!-- Original Copy -->
     <div class="copy-title">Original Copy</div>
-    <table>
-      <thead>
-        <tr>
-          <th colspan="7" style="text-align:center;">
-            <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
-              <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
-              <span class="page-number" style="position:absolute; right:0;"></span>
-            </div>
-          </th>
-        </tr>
+   <div class="original">
+  <table>
+    <thead>
+      <tr>
+        <th colspan="7">
+          <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
+            <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
+            <span class="page-number" style="position:absolute; right:0;"></span>
+          </div>
+        </th>
+      </tr>
         <tr>
           <th colspan="7"><div class="order-header">${headerHTML}</div></th>
         </tr>
@@ -467,21 +472,23 @@ const printSoldItems = (customerName, city, sold, phoneNumber, transportName, ch
       </thead>
       <tbody>${tbodyHTML}</tbody>
     </table>
+    </div>
 
     <div style="page-break-before: always;"></div>
 
     <!-- Duplicate Copy -->
     <div class="copy-title">Duplicate Copy</div>
-    <table>
-      <thead>
-        <tr>
-          <th colspan="7" style="text-align:center;">
-            <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
-              <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
-              <span class="page-number" style="position:absolute; right:0;"></span>
-            </div>
-          </th>
-        </tr>
+    <div class="duplicate">
+  <table>
+    <thead>
+      <tr>
+        <th colspan="7">
+          <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
+            <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
+            <span class="page-number" style="position:absolute; right:0;" data-page="Page 1"></span>
+          </div>
+        </th>
+      </tr>
         <tr>
           <th colspan="7"><div class="order-header">${headerHTML}</div></th>
         </tr>
@@ -497,6 +504,7 @@ const printSoldItems = (customerName, city, sold, phoneNumber, transportName, ch
       </thead>
       <tbody>${tbodyHTML}</tbody>
     </table>
+    </div>
 
     <script>
       window.onload = () => {
@@ -1019,96 +1027,99 @@ const printSoldItems = (customerName, city, sold, phoneNumber, transportName, ch
                         />
                       </td>
                       <td>
-                        {(editedItem.less?.includes("%") || !editedItem.less) ? (
-                          // ✅ Show input + select combo when % or empty
-                          <div style={{ display: "flex", alignItems: "center" }}>
-                            <input
-                              type="number"
-                              value={editedItem.less && editedItem.less.includes("%") ? editedItem.less.replace("%", "") : "0"} // default 0 if empty
-                              onChange={e =>
-                                setEditedItem({ ...editedItem, less: e.target.value + "%" })
-                              }
-                              style={{
-                                width: "60px",
-                                fontSize: "14px",
-                                padding: "4px",
-                                border: "1px solid #ccc",
-                                borderRadius: "4px 0 0 4px",
-                                outline: "none"
-                              }}
-                              onBlur={e => {
-                                let val = e.target.value;
-                                if (!val) val = "0";
-                                if (!val.includes("%")) val += "%";
-                                setEditedItem({ ...editedItem, less: val });
-                              }}
-                              onKeyDown={handleKeyDown}
-                            />
-                            <select
-                              value="%"
-                              onChange={e => {
-                                if (e.target.value === "%") {
-                                  if (!editedItem.less || !editedItem.less.includes("%")) {
-                                    setEditedItem({ ...editedItem, less: "0%" });
-                                  }
-                                } else {
-                                  setEditedItem({ ...editedItem, less: e.target.value });
-                                }
-                              }}
-                              style={{
-                                fontSize: "14px",
-                                padding: "4px",
-                                border: "1px solid #ccc",
-                                borderLeft: "none",
-                                borderRadius: "0 4px 4px 0",
-                                backgroundColor: "#f9f9f9",
-                                cursor: "pointer",
-                                width: "90px"
-                              }}
-                            >
-                              <option value="%">%</option>
-                              <option value="NET">NET</option>
-                              <option value="Pair">Pair</option>
-                              <option value="Full Bill">Full Bill</option>
-                              <option value="Half Bill">Half Bill</option>
-                            </select>
-                          </div>
-                        ) : (
-                          // ✅ Normal select when not in % mode
-                          <select
-                            value={editedItem.less} // ✅ show exact value from Firebase
-                            onChange={e => {
-                              if (e.target.value === "%") {
-                                setEditedItem({ ...editedItem, less: "0%" });
-                              } else {
-                                setEditedItem({ ...editedItem, less: e.target.value });
-                              }
-                            }}
-                            style={{
-                              width: "120px",
-                              fontSize: "14px",
-                              padding: "4px",
-                              borderRadius: "4px",
-                              border: "1px solid #ccc",
-                              backgroundColor: "#fff",
-                              cursor: "pointer"
-                            }}
-                            onKeyDown={handleKeyDown}
-                          >
-                            {/* Predefined options */}
-                            <option value="%">%</option>
-                            <option value="NET">NET</option>
-                            <option value="Pair">Pair</option>
-                            <option value="Full Bill">Full Bill</option>
-                            <option value="Half Bill">Half Bill</option>
+  {(editedItem.less?.includes("%") || !editedItem.less) ? (
+    <div style={{ display: "flex", alignItems: "center" }}>
+      <input
+  type="number"
+  value={
+    editedItem.less
+      ? editedItem.less.toString().trim().replace("%", "").trim()
+      : ""
+  }
+  onChange={e =>
+    setEditedItem({ ...editedItem, less: e.target.value + "%" })
+  }
+  style={{
+    width: "60px",
+    fontSize: "14px",
+    padding: "4px",
+    border: "1px solid #ccc",
+    borderRadius: "4px 0 0 4px",
+    outline: "none"
+  }}
+  onBlur={e => {
+    let val = e.target.value.trim();
+    if (!val) val = "0";
+    if (!val.includes("%")) val = val + "%";
+    setEditedItem({ ...editedItem, less: val });
+  }}
+  onKeyDown={handleKeyDown}
+/>
 
-                            {/* ✅ Add Firebase value if not present */}
-                            {!["%", "NET", "Pair", "Full Bill", "Half Bill"].includes(editedItem.less) && (
-                              <option value={editedItem.less}>{editedItem.less}</option>
-                            )}
-                          </select>
-                        )}
-                      </td>
+      <select
+        value="%"
+        onChange={e => {
+          if (e.target.value === "%") {
+            // ✅ Keep existing % value from Firebase if present
+            const currentLess =
+              editedItem.less && editedItem.less.includes("%")
+                ? editedItem.less
+                : "0%";
+            setEditedItem({ ...editedItem, less: currentLess });
+          } else {
+            setEditedItem({ ...editedItem, less: e.target.value });
+          }
+        }}
+        style={{
+          fontSize: "14px",
+          padding: "4px",
+          border: "1px solid #ccc",
+          borderLeft: "none",
+          borderRadius: "0 4px 4px 0",
+          backgroundColor: "#f9f9f9",
+          cursor: "pointer",
+          width: "90px"
+        }}
+      >
+        <option value="%">%</option>
+        <option value="NET">NET</option>
+        <option value="Pair">Pair</option>
+        <option value="Full Bill">Full Bill</option>
+        <option value="Half Bill">Half Bill</option>
+      </select>
+    </div>
+  ) : (
+    <select
+      value={editedItem.less} // show exact value from Firebase
+      onChange={e => {
+        if (e.target.value === "%") {
+          setEditedItem({ ...editedItem, less: "0%" });
+        } else {
+          setEditedItem({ ...editedItem, less: e.target.value });
+        }
+      }}
+      style={{
+        width: "120px",
+        fontSize: "14px",
+        padding: "4px",
+        borderRadius: "4px",
+        border: "1px solid #ccc",
+        backgroundColor: "#fff",
+        cursor: "pointer"
+      }}
+      onKeyDown={handleKeyDown}
+    >
+      <option value="%">%</option>
+      <option value="NET">NET</option>
+      <option value="Pair">Pair</option>
+      <option value="Full Bill">Full Bill</option>
+      <option value="Half Bill">Half Bill</option>
+      {!["%", "NET", "Pair", "Full Bill", "Half Bill"].includes(editedItem.less) && (
+        <option value={editedItem.less}>{editedItem.less}</option>
+      )}
+    </select>
+  )}
+</td>
 
 
 
@@ -1192,27 +1203,32 @@ const printSoldItems = (customerName, city, sold, phoneNumber, transportName, ch
                         {editedItem.less?.includes("%") || !editedItem.less ? (
                           <div style={{ display: "flex", alignItems: "center" }}>
                             <input
-                              type="number"
-                              value={editedItem.less && editedItem.less.includes("%") ? editedItem.less.replace("%", "") : "0"}
-                              onChange={e =>
-                                setEditedItem({ ...editedItem, less: e.target.value + "%" })
-                              }
-                              style={{
-                                width: "60px",
-                                fontSize: "14px",
-                                padding: "4px",
-                                border: "1px solid #ccc",
-                                borderRadius: "4px 0 0 4px",
-                                outline: "none"
-                              }}
-                              onBlur={e => {
-                                let val = e.target.value;
-                                if (!val) val = "0";
-                                if (!val.includes("%")) val += "%";
-                                setEditedItem({ ...editedItem, less: val });
-                              }}
-                              onKeyDown={handleKeyDown}
-                            />
+  type="number"
+  value={
+    editedItem.less
+      ? editedItem.less.toString().trim().replace("%", "").trim()
+      : ""
+  }
+  onChange={e =>
+    setEditedItem({ ...editedItem, less: e.target.value + "%" })
+  }
+  style={{
+    width: "60px",
+    fontSize: "14px",
+    padding: "4px",
+    border: "1px solid #ccc",
+    borderRadius: "4px 0 0 4px",
+    outline: "none"
+  }}
+  onBlur={e => {
+    let val = e.target.value;
+    if (!val) val = "0";
+    if (!val.includes("%")) val += "%";
+    setEditedItem({ ...editedItem, less: val });
+  }}
+  onKeyDown={handleKeyDown}
+/>
+
                             <select
                               value="%"
                               onChange={e => {
@@ -1277,9 +1293,6 @@ const printSoldItems = (customerName, city, sold, phoneNumber, transportName, ch
                           </select>
                         )}
                       </td>
-
-
-
                       <td>
                         <input
                           type="number"
@@ -1503,7 +1516,12 @@ const printSoldItems = (customerName, city, sold, phoneNumber, transportName, ch
                         <div style={{ display: "flex", alignItems: "center" }}>
                           <input
                             type="number"
-                            value={item.less && item.less.includes("%") ? item.less.replace("%", "") : ""}
+                            value={
+  item.less
+    ? item.less.toString().trim().replace("%", "").trim()
+    : ""
+}
+
                             // default 0 if empty
                             onChange={e => {
                               const up = [...editOrderData.items];
@@ -1657,7 +1675,8 @@ const printSoldItems = (customerName, city, sold, phoneNumber, transportName, ch
                     sellQty: item.sellQty ?? "",
                     less: item.less ?? "",
                     price: item.price ?? 0,
-                    packet: item.packet ?? ""
+                    packet: item.packet ?? "",
+                    kgRate: item.kgRate ?? "" 
                   }));
                   try {
                     // ✅ Keep all rows intact

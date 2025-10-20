@@ -550,16 +550,25 @@ setLessUnit(
         <input placeholder="City" value={city} onChange={e => setCity(e.target.value)} />
         <div className="autocomplete-wrapper" style={{ position: 'relative' }}>
   <input
-    placeholder="Product"
-    value={productName}
-    onChange={e => setProductName(e.target.value)}
-    onKeyDown={handleProductKeyDown}
-    onBlur={handleProductBlur}
-    autoComplete="off"
-    className={productError ? 'input-error' : ''}
-    ref={productInputRef}
-    disabled={!!editing}   // ✅ disable in update mode
-  />
+  placeholder="Product"
+  value={productName}
+  onChange={e => {
+    const val = e.target.value;
+    setProductName(val);
+
+    // ✅ Reset justSelectedProduct if user types something new
+    if (val !== productName) {
+      setJustSelectedProduct(false);
+    }
+  }}
+  onKeyDown={handleProductKeyDown}
+  onBlur={handleProductBlur}
+  autoComplete="off"
+  className={productError ? 'input-error' : ''}
+  ref={productInputRef}
+  disabled={!!editing}   // disable in update mode
+/>
+
 
   {/* ✅ Only show dropdown in Add mode */}
   {!editing && prodSuggestions.length > 0 && (

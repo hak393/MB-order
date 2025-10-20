@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
+import { query, orderByChild, equalTo } from "firebase/database"; // at top
 import { getDatabase, ref, onValue, update, get, remove, push} from 'firebase/database'; // ⬅ added get
 import './Style.css';
 
@@ -226,7 +227,9 @@ if (orderDate) {
 
       const product = cells[0].innerHTML.replace(/\s*\(.*?\)/g, "").trim();
       const soldQty = cells[1].innerHTML;
-      const weight = cells[2].innerHTML;
+      const weightValue = parseFloat(cells[2].innerHTML);
+const weight = isNaN(weightValue) ? "" : weightValue.toFixed(3);
+ // ✅ always 3 decimal places
       const less = cells[3].innerHTML.replace(/₹/g, "");
       const price = cells[4].innerHTML.replace(/₹/g, "");
       const packet = cells[5].innerHTML;
@@ -254,31 +257,35 @@ if (orderDate) {
       <head>
         <title>Packing Slip</title>
         <style>
-          @page { size: A5 landscape; margin: 10mm; }
-          thead { display: table-header-group; }
-          body { font-family: Arial, sans-serif; padding: 20px; transform: scale(0.85); transform-origin: top left; counter-reset: page; }
-          h2 { text-align: center; margin-bottom: 5px; }
-          .copy-title { text-align:center; font-size:14px; font-weight:bold; margin-bottom:10px; }
-          .order-header { margin-bottom: 15px; font-size: 14px; line-height: 1.5; }
-          table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
-          th, td { border: 1px solid #000; padding: 6px; text-align: center; }
-          /* ✅ Restored page numbering */
-          .page-number:after { counter-increment: page; content: "Page " counter(page); }
-        </style>
+  @page { size: A5 landscape; margin: 10mm; }
+  thead { display: table-header-group; }
+  body { font-family: Arial, sans-serif; padding: 20px; transform: scale(0.85); transform-origin: top left; }
+  h2 { text-align: center; margin-bottom: 5px; }
+  .copy-title { text-align:center; font-size:14px; font-weight:bold; margin-bottom:10px; }
+  .order-header { margin-bottom: 15px; font-size: 14px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+  th, td { border: 1px solid #000; padding: 6px; text-align: center; }
+  /* ✅ Original Copy page numbering */
+  .original .page-number:after { counter-increment: page; content: "Page " counter(page); }
+  /* ✅ Duplicate Copy uses same page number as original */
+  .duplicate .page-number:after { content: attr(data-page); }
+</style>
+
       </head>
       <body>
         <!-- Original Copy -->
         <div class="copy-title">Original Copy</div>
-        <table>
-          <thead>
-            <tr>
-              <th colspan="7" style="text-align:center;">
-                <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
-                  <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
-                  <span class="page-number" style="position:absolute; right:0;"></span>
-                </div>
-              </th>
-            </tr>
+        <div class="original">
+  <table>
+    <thead>
+      <tr>
+        <th colspan="7">
+          <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
+            <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
+            <span class="page-number" style="position:absolute; right:0;"></span>
+          </div>
+        </th>
+      </tr>
             <tr>
               <th colspan="7"><div class="order-header">${headerHTML}</div></th>
             </tr>
@@ -293,22 +300,24 @@ if (orderDate) {
             </tr>
           </thead>
           <tbody>${tbodyHTML}</tbody>
-        </table>
+          </table>
+</div>
 
         <div style="page-break-before: always;"></div>
 
         <!-- Duplicate Copy -->
         <div class="copy-title">Duplicate Copy</div>
-        <table>
-          <thead>
-            <tr>
-              <th colspan="7" style="text-align:center;">
-                <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
-                  <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
-                  <span class="page-number" style="position:absolute; right:0;"></span>
-                </div>
-              </th>
-            </tr>
+        <div class="duplicate">
+  <table>
+    <thead>
+      <tr>
+        <th colspan="7">
+          <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
+            <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
+            <span class="page-number" style="position:absolute; right:0;" data-page="Page 1"></span>
+          </div>
+        </th>
+      </tr>
             <tr>
               <th colspan="7"><div class="order-header">${headerHTML}</div></th>
             </tr>
@@ -323,7 +332,8 @@ if (orderDate) {
             </tr>
           </thead>
           <tbody>${tbodyHTML}</tbody>
-        </table>
+       </table>
+</div>
       </body>
       <script>
         window.onload = () => {
@@ -339,10 +349,40 @@ if (orderDate) {
 
 
 
-  const handleEdit = (order) => {
-    setEditingOrder(order);
-    setEditItems(order.items.map(item => ({ ...item })));
-  };
+const handleEdit = async (order) => {
+  setEditingOrder(order);
+
+  const updatedItems = await Promise.all(order.items.map(async (item) => {
+    // Use existing kgRate from Firebase
+    const existingKgRate = item.kgRate || "";
+
+    // Fallback: fetch from products if needed
+    if (!existingKgRate && item.productName) {
+      try {
+        const productsQuery = query(
+          ref(db, "products"),
+          orderByChild("name"),
+          equalTo(item.productName.trim())
+        );
+        const snap = await get(productsQuery);
+        if (snap.exists()) {
+          const productData = Object.values(snap.val())[0];
+          return { ...item, kgRate: productData.kgRate || "" };
+        }
+      } catch (err) {
+        console.error("Error fetching kgRate:", err);
+      }
+    }
+
+    return { ...item, kgRate: existingKgRate };
+  }));
+
+  setEditItems(updatedItems);
+};
+
+
+
+
 
   const handleKeyDown = (e, rowIndex, col) => {
     const cols = ['originalQty', 'soldQty', 'weight', 'less', 'price', 'packet']; // skip 'productName'
@@ -648,6 +688,7 @@ const handleSave = async () => {
                   <th>Original Qty</th>
                   <th>Sold Qty</th>
                   <th>Weight</th>
+                  <th>Kg Rate</th>
                   <th>Less</th>
                   <th>Price</th>
                   <th>Packet</th>
@@ -684,15 +725,64 @@ const handleSave = async () => {
                         onKeyDown={(e) => handleKeyDown(e, idx, 'soldQty')}
                       />
                     </td>
+      <td>
+  <input
+    type="number"
+    min="0"
+    value={item.weight ?? ''}
+    style={{ width: '70px' }}
+    data-row={idx}
+    data-col="weight"
+    onChange={e => {
+      let val = e.target.value;
+
+      // Prevent leading zeros like 025
+      if (val.startsWith('0') && !val.includes('.')) {
+        val = val.replace(/^0+/, '');
+      }
+
+      const weight = parseFloat(val) || 0;
+      const up = [...editItems]; // your state array
+      up[idx].weight = val === '' ? '' : weight; // keep field empty if erased
+      const kgRate = parseFloat(up[idx].kgRate) || 0;
+      const sellQty = parseFloat(up[idx].soldQty) || 1;
+      up[idx].price = val === '' ? 0 : Math.ceil(weight * kgRate / sellQty); // recalc price
+      setEditItems(up);
+    }}
+    onKeyDown={(e) => handleKeyDown(e, idx, "less")}
+  />
+</td>
+
                     <td>
-                      <input
-                        value={item.weight || ''}
-                        data-row={idx}
-                        data-col="weight"
-                        onChange={(e) => handleItemChange(idx, 'weight', e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(e, idx, 'weight')}
-                      />
-                    </td>
+  <input
+    type="number"
+    min="0"
+    value={item.kgRate ?? ''}
+    style={{ width: '70px' }}
+    data-row={idx}
+    data-col="kgRate"
+    onChange={e => {
+      let val = e.target.value;
+
+      // Prevent leading zeros like 025
+      if (val.startsWith('0') && !val.includes('.')) {
+        val = val.replace(/^0+/, '');
+      }
+
+      const kgRate = parseFloat(val) || 0;
+      const up = [...editItems]; // your state array
+      up[idx].kgRate = val === '' ? '' : kgRate; // keep field empty if erased
+      const weight = parseFloat(up[idx].weight) || 0;
+      const sellQty = parseFloat(up[idx].soldQty) || 1;
+      up[idx].price = val === '' ? 0 : Math.ceil(weight * kgRate / sellQty); // recalc price
+      setEditItems(up);
+    }}
+    onKeyDown={(e) => handleKeyDown(e, idx, "less")}
+  />
+</td>
+
+
+
                     <td>
   {(item.less?.includes("%") || !item.less) ? (
     // ✅ Show input + select combo when % or empty

@@ -590,16 +590,22 @@ setLessUnit(
   placeholder="Product"
   value={productName}
   onChange={e => {
-    setProductName(e.target.value);
-    setJustSelectedProduct(false);   // ✅ reset so dropdown works again
+    const val = e.target.value;
+    setProductName(val);
+
+    // ✅ Reset justSelectedProduct if user types something new
+    if (val !== productName) {
+      setJustSelectedProduct(false);
+    }
   }}
   onKeyDown={handleProductKeyDown}
   onBlur={handleProductBlur}
   autoComplete="off"
   className={productError ? 'input-error' : ''}
   ref={productInputRef}
-  disabled={!!editing}
+  disabled={!!editing}   // disable in update mode
 />
+
 
 
   {/* ✅ Only show dropdown in Add mode */}
