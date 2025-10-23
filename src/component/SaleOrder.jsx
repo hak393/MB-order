@@ -144,6 +144,13 @@ const SellOrder = () => {
 
 
   const handlePrint = async (id) => {
+    // ✅ Decode HTML entities like &amp;, &nbsp;, etc.
+const decodeHTML = (text) => {
+  const temp = document.createElement("textarea");
+  temp.innerHTML = text;
+  return temp.value;
+};
+
   const content = printRefs.current[id];
   if (!content) return;
   const printCopies = ["Original Copy", "Duplicate Copy"];
@@ -170,8 +177,14 @@ const SellOrder = () => {
     if (snap.exists()) {
       const customers = snap.val();
       const found = Object.values(customers).find(
-        (c) => c.name === customerName && c.city === city
-      );
+  (c) =>
+    decodeHTML(c.name)?.trim().toLowerCase() ===
+      decodeHTML(customerName)?.trim().toLowerCase() &&
+    decodeHTML(c.city)?.trim().toLowerCase() ===
+      decodeHTML(city)?.trim().toLowerCase()
+);
+
+
       if (found?.number) phoneNumber = found.number;
     }
   } catch (err) {
@@ -186,8 +199,14 @@ const SellOrder = () => {
     if (snap.exists()) {
       const orders = snap.val();
       const foundOrder = Object.values(orders).find(
-        (o) => o.customerName === customerName && o.city === city
-      );
+  (o) =>
+    decodeHTML(o.customerName)?.trim().toLowerCase() ===
+      decodeHTML(customerName)?.trim().toLowerCase() &&
+    decodeHTML(o.city)?.trim().toLowerCase() ===
+      decodeHTML(city)?.trim().toLowerCase()
+);
+
+
       if (foundOrder?.transportName) transportName = foundOrder.transportName;
     }
   } catch (err) {
