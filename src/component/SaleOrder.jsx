@@ -44,7 +44,14 @@ const SellOrder = () => {
   const [lastChallanNo, setLastChallanNo] = useState("00"); // ✅ new state
   const [editingOrder, setEditingOrder] = useState(null);
   const [editItems, setEditItems] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState(() => {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+});
+
   const printRefs = useRef({});
 
   useEffect(() => {
@@ -94,53 +101,6 @@ const SellOrder = () => {
       setSellOrders(withChallan);
     });
   }, []);
-
-
-//   useEffect(() => {
-//   const sellOrdersRef = ref(db, "sellOrders");
-//   return onValue(sellOrdersRef, (snap) => {
-//     const data = snap.val();
-//     const formatted = data
-//       ? Object.keys(data).map((key) => ({ id: key, ...data[key] }))
-//       : [];
-
-//     formatted.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
-//     const dayMap = {}; // 🔥 reset per day
-//     const withChallan = formatted.map((order) => {
-//       if (!order.challanNo) {
-//         const date = new Date(order.timestamp);
-//         const dayKey = date.toISOString().slice(0, 10); // e.g. "2025-09-15"
-
-//         dayMap[dayKey] = (dayMap[dayKey] || 0) + 1;
-//         const challanNo = dayMap[dayKey].toString().padStart(2, "0");
-
-//         update(ref(db, `sellOrders/${order.id}`), { challanNo });
-//         return { ...order, challanNo };
-//       }
-
-//       return order; // ✅ keep existing challanNo
-//     });
-
-//     // ✅ get today’s challan max
-//     const todayKey = new Date().toISOString().slice(0, 10);
-//     const todayOrders = withChallan.filter(
-//       (o) => new Date(o.timestamp).toISOString().slice(0, 10) === todayKey
-//     );
-//     if (todayOrders.length > 0) {
-//       const maxChallan = Math.max(
-//         ...todayOrders.map((o) => parseInt(o.challanNo, 10) || 0)
-//       );
-//       setLastChallanNo(maxChallan.toString().padStart(2, "0"));
-// } else {
-//   setLastChallanNo("00");
-//   update(ref(db, "challanCounter"), { lastNo: 0 });  // ⬅ add this line
-// }
-
-//     withChallan.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-//     setSellOrders(withChallan);
-//   });
-// }, []);
 
 
   const handlePrint = async (id) => {
@@ -585,20 +545,24 @@ const handleSave = async () => {
                   <strong>City:</strong> {order.city} <br />
                   <strong>Transport:</strong> {order.transportName || '-'} <br />
                   <strong>Date:</strong> {(() => {
-  const d = new Date(order.timestamp);
-  const day = d.getDate().toString().padStart(2,'0');
-  const month = (d.getMonth() + 1).toString().padStart(2,'0');
-  const year = d.getFullYear();
+  const ts = order.timestamp; // "2025-10-24T06:58:00.156Z"
   
-  let hours = d.getHours();
-  const minutes = d.getMinutes().toString().padStart(2,'0');
+  // Extract date and time from the string directly
+  const [datePart, timePart] = ts.split("T");
+  const [year, month, day] = datePart.split("-");
+  const [hour, minute] = timePart.split(":");
+  
+  // Optional: convert to 12-hour format
+  let hours = parseInt(hour);
+  const minutesStr = minute;
   const ampm = hours >= 12 ? 'PM' : 'AM';
   hours = hours % 12;
   if (hours === 0) hours = 12;
 
-  return `${day}/${month}/${year} ${hours}:${minutes} ${ampm}`;
+  return `${day}/${month}/${year} ${hours}:${minutesStr} ${ampm}`;
 })()}
-                </div>
+</div>
+
               </div>
               <table>
                 <thead>

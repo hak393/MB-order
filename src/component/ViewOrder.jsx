@@ -22,6 +22,9 @@ const ViewOrder = () => {
   const [showAddModal, setShowAddModal] = useState(false); // ✅ New state
   const [activeOrderId, setActiveOrderId] = useState(null); // ✅ add this
   const [expandedOrder, setExpandedOrder] = useState(null);
+const now = new Date();
+const localISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString();
+
 
 
 
@@ -317,24 +320,25 @@ const ViewOrder = () => {
 
 
       await push(ref(db, 'sellOrders'), {
-        user,
-        customerName,
-        city,
-        transportName: transportName || '',
-        challanNo: newChallanNo,
-        timestamp: new Date().toISOString(),
-        items: sellItems.map(i => ({
-          productName: i.productName,
-          originalQty: i.originalQty,
-          soldQty: i.soldQty,
-          unit: i.unit,
-          weight: i.weight,
-          price: i.price,
-          less: i.less,
-          packet: i.packet || '',
-          kgRate: i.kgRate || ''
-        }))
-      });
+  user,
+  customerName,
+  city,
+  transportName: transportName || '',
+  challanNo: newChallanNo,
+  timestamp: localISO, // ✅ ALWAYS use current timestamp
+  items: sellItems.map(i => ({
+    productName: i.productName,
+    originalQty: i.originalQty,
+    soldQty: i.soldQty,
+    unit: i.unit,
+    weight: i.weight,
+    price: i.price,
+    less: i.less,
+    packet: i.packet || '',
+    kgRate: i.kgRate || ''
+  }))
+});
+
 
       // Remaining qty > 0 goes to pending
       sellItems.forEach(i => {
@@ -359,23 +363,22 @@ const ViewOrder = () => {
 
     // Push pending rows
     for (const i of pendingItems) {
-      await push(ref(db, 'pendingOrders'), {
-        user,
-        customerName,
-        city: i.city || city || '',
-        productName: i.productName,
-        soldQty: i.soldQty,
-        remainingQty: i.remainingQty,
-        unit: i.unit,
-        weight: i.weight || '',
-        price: i.price,
-        less: i.less || '',
-        packet: i.packet || '',
-        kgrate: i.kgrate || '',   // ✅ added here
-        timestamp: new Date().toISOString()
-      });
-    }
-
+  await push(ref(db, 'pendingOrders'), {
+    user,
+    customerName,
+    city: i.city || city || '',
+    productName: i.productName,
+    soldQty: i.soldQty,
+    remainingQty: i.remainingQty,
+    unit: i.unit,
+    weight: i.weight || '',
+    price: i.price,
+    less: i.less || '',
+    packet: i.packet || '',
+    kgrate: i.kgrate || '',
+    timestamp: localISO,  // ✅ Use same current date
+  });
+}
     // Remove original order
     await remove(ref(db, `orders/${user}/${orderId}`));
     setOrders(p => p.filter(o => !(o.user === user && o.orderId === orderId)));
