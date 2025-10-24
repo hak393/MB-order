@@ -69,58 +69,65 @@ const ViewOrder = () => {
 
   // 🔹 2. Effect for transportName when modal opens
   useEffect(() => {
-    if (!showModal || !editOrderData?.orderId || !userName) return;
+  if (!showModal || !editOrderData?.orderId || !editOrderData?.user) return;
 
-    const fetchTransportName = async () => {
-      try {
-        const snapshot = await get(ref(db, `orders/${userName}/${editOrderData.orderId}/transportName`));
-        if (snapshot.exists()) {
-          setTransportName(snapshot.val());
-        } else {
-          setTransportName(""); // default empty if none saved
-        }
-      } catch (error) {
-        console.error("Error fetching transportName:", error);
+  const fetchTransportName = async () => {
+    try {
+      const snapshot = await get(ref(db, `orders/${editOrderData.user}/${editOrderData.orderId}/transportName`));
+      if (snapshot.exists()) {
+        setTransportName(snapshot.val());
+      } else {
+        setTransportName(""); // default empty if none saved
       }
-    };
-
-    fetchTransportName();
-  }, [showModal, editOrderData?.orderId, userName]);
-
-
-
-
-
-  const handleSellOrder = (user, customerName, orderData, orderId) => {
-    // Normal items
-    const normalItems = (orderData.items || []).map(i => ({
-      ...i,
-      sellQty: i.soldQty ?? i.sellQty ?? "", // ✅ Take soldQty first, then existing sellQty, else empty
-      isPending: false
-    }));
-
-    // Pending items
-    const pendingItems = (orderData.pendingOrderRows || []).map(i => ({
-      ...i,
-      sellQty: i.soldQty ?? i.sellQty ?? "", // ✅ Same logic for pending
-      isPending: true
-    }));
-
-    // ✅ Pending items first
-    const combinedItems = [...pendingItems, ...normalItems];
-
-
-    setEditOrderData({
-      user,
-      customerName,
-      city: orderData.city,
-      items: combinedItems,
-      orderId,
-      orderData // ✅ keep original for save
-    });
-
-    setShowModal(true);
+    } catch (error) {
+      console.error("Error fetching transportName:", error);
+    }
   };
+
+  fetchTransportName();
+}, [showModal, editOrderData?.orderId, editOrderData?.user]);
+
+
+
+
+
+  const handleSellOrder = async (user, customerName, orderData, orderId) => {
+  // Fetch transportName from the order's owner
+  let transportNameFromDB = "";
+  try {
+    const snapshot = await get(ref(db, `orders/${user}/${orderId}/transportName`));
+    if (snapshot.exists()) transportNameFromDB = snapshot.val();
+  } catch (err) {
+    console.error("Error fetching transportName:", err);
+  }
+
+  const normalItems = (orderData.items || []).map(i => ({
+    ...i,
+    sellQty: i.soldQty ?? i.sellQty ?? "",
+    isPending: false
+  }));
+
+  const pendingItems = (orderData.pendingOrderRows || []).map(i => ({
+    ...i,
+    sellQty: i.soldQty ?? i.sellQty ?? "",
+    isPending: true
+  }));
+
+  const combinedItems = [...pendingItems, ...normalItems];
+
+  setEditOrderData({
+    user, // original order owner
+    customerName,
+    city: orderData.city,
+    items: combinedItems,
+    orderId,
+    transportName: transportNameFromDB || "",
+    orderData
+  });
+
+  setTransportName(transportNameFromDB || "");
+  setShowModal(true);
+};
 
 
   const handleKeyDown = (e, rowIdx = null, colName = null) => {
