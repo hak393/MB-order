@@ -83,35 +83,48 @@ const SellOrder = () => {
 
 
       // ✅ Get the last challan number (max challanNo across all)
-      if (withChallan.length > 0) {
+      // ✅ Get the last challan number (max challanNo across all)
+if (withChallan.length > 0) {
   const today = new Date();
-  const isFirstDayOfMonth = today.getDate() === 1;
 
-  let maxChallan = Math.max(
-    ...withChallan.map(o => parseInt(o.challanNo, 10) || 0)
-  );
+  // Find the latest challan entry
+  const latestOrder = withChallan.reduce((latest, current) => {
+    return new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest;
+  });
 
-  // ✅ Reset challan number only once (for first order of new month)
-  if (isFirstDayOfMonth) {
-    // check if there are NO challans yet for this new month
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    const challansThisMonth = withChallan.filter(o => {
-      const d = new Date(o.timestamp);
-      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-    });
+  const latestDate = new Date(latestOrder.timestamp);
+  const sameMonth =
+    latestDate.getMonth() === today.getMonth() &&
+    latestDate.getFullYear() === today.getFullYear();
 
-    if (challansThisMonth.length === 0) {
-      maxChallan = 0; // reset only for first challan of the new month
-    }
+  let maxChallan = 0;
+
+  if (sameMonth) {
+    // ✅ Continue same month's challan numbering
+    maxChallan = Math.max(
+      ...withChallan
+        .filter(o => {
+          const d = new Date(o.timestamp);
+          return (
+            d.getMonth() === today.getMonth() &&
+            d.getFullYear() === today.getFullYear()
+          );
+        })
+        .map(o => parseInt(o.challanNo, 10) || 0)
+    );
+  } else {
+    // ✅ New month → reset to 0
+    maxChallan = 0;
+    update(ref(db, "challanCounter"), { lastNo: 0 });
   }
 
+  // ✅ Always update UI challan display
   setLastChallanNo(maxChallan.toString().padStart(2, "0"));
-  update(ref(db, "challanCounter"), { lastNo: maxChallan });
 } else {
   setLastChallanNo("00");
   update(ref(db, "challanCounter"), { lastNo: 0 });
 }
+
 
 withChallan.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 setSellOrders(withChallan);
