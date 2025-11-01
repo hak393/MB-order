@@ -91,9 +91,19 @@ const SellOrder = () => {
     ...withChallan.map(o => parseInt(o.challanNo, 10) || 0)
   );
 
-  // ✅ Reset challan number if it's the 1st day of a new month
+  // ✅ Reset challan number only once (for first order of new month)
   if (isFirstDayOfMonth) {
-    maxChallan = 0;
+    // check if there are NO challans yet for this new month
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    const challansThisMonth = withChallan.filter(o => {
+      const d = new Date(o.timestamp);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    });
+
+    if (challansThisMonth.length === 0) {
+      maxChallan = 0; // reset only for first challan of the new month
+    }
   }
 
   setLastChallanNo(maxChallan.toString().padStart(2, "0"));
