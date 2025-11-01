@@ -84,21 +84,28 @@ const SellOrder = () => {
 
       // ✅ Get the last challan number (max challanNo across all)
       if (withChallan.length > 0) {
-  const maxChallan = Math.max(
+  const today = new Date();
+  const isFirstDayOfMonth = today.getDate() === 1;
+
+  let maxChallan = Math.max(
     ...withChallan.map(o => parseInt(o.challanNo, 10) || 0)
   );
+
+  // ✅ Reset challan number if it's the 1st day of a new month
+  if (isFirstDayOfMonth) {
+    maxChallan = 0;
+  }
+
   setLastChallanNo(maxChallan.toString().padStart(2, "0"));
-  // ✅ also update challanCounter section in Firebase
   update(ref(db, "challanCounter"), { lastNo: maxChallan });
 } else {
   setLastChallanNo("00");
-  // ✅ when last challan is zero, update challanCounter in Firebase too
   update(ref(db, "challanCounter"), { lastNo: 0 });
 }
 
+withChallan.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+setSellOrders(withChallan);
 
-      withChallan.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      setSellOrders(withChallan);
     });
   }, []);
 
