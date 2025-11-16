@@ -1306,6 +1306,18 @@ input[list] {
  }
 }
 
+/* Hide by default */
+.print-only {
+  display: none;
+}
+
+/* Show only when printing */
+@media print {
+  .print-only {
+    display: block !important;
+  }
+}
+
 
 
 

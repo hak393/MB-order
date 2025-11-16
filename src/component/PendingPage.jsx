@@ -14,8 +14,7 @@ const [editValues, setEditValues] = useState({
   qty: '',
   weight: '',
   less: '',
-  price: '',
-  packet: ''
+  price: ''
 });
 
 
@@ -101,7 +100,6 @@ const formatTimestamp = (timestamp) => {
       weight: editValues.weight,
       less: editValues.less,
       price: editValues.price,
-      packet: editValues.packet
     };
 
     // Update Firebase
@@ -229,7 +227,7 @@ const formatTimestamp = (timestamp) => {
                     <th>Weight</th>
                     <th>Less</th>
                     <th>Price</th>
-                    <th>Packet</th>
+                    
                     <th>Time</th>
                     <th>Action</th>
                   </tr>
@@ -365,21 +363,7 @@ const formatTimestamp = (timestamp) => {
           )}
         </td>
 
-        {/* Packet */}
-        <td>
-          {isEditing ? (
-            <input
-              type="text"
-              value={editValues.packet}
-              onChange={(e) =>
-                setEditValues({ ...editValues, packet: e.target.value })
-              }
-              style={{ width: '60px' }}
-            />
-          ) : (
-            order.packet || '-'
-          )}
-        </td>
+        
 
         <td>{formatTimestamp(order.timestamp)}</td>
 
@@ -410,7 +394,7 @@ const formatTimestamp = (timestamp) => {
                     weight: order.weight || '',
                     less: order.less || '',
                     price: order.price,
-                    packet: order.packet || ''
+                    
                   });
                 }}
               >

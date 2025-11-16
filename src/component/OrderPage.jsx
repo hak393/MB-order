@@ -32,6 +32,8 @@ const OrderPage = () => {
   const [justSelectedProduct, setJustSelectedProduct] = useState(false);
   const [loading, setLoading] = useState(false);
   const [kgRate, setKgRate] = useState('');
+  const [note, setNote] = useState("");
+
 
 
   
@@ -62,73 +64,115 @@ const OrderPage = () => {
   }, []);
 
   useEffect(() => {
-    if (refDebCust.current) clearTimeout(refDebCust.current);
-    if (justSelectedCustomer || !custName.trim()) return setSuggestions([]);
-    setValidCustomer(false);
-    refDebCust.current = setTimeout(() => {
-      fetch(`${URL}/customers.json`).then(r => r.json()).then(d => {
+  if (refDebCust.current) clearTimeout(refDebCust.current);
+  if (justSelectedCustomer || !custName.trim()) return setSuggestions([]);
+  setValidCustomer(false);
+
+  // ✅ Normalization function (remove special chars & spaces)
+  const normalize = (str) =>
+    str.toLowerCase().replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, '');
+
+  refDebCust.current = setTimeout(() => {
+    fetch(`${URL}/customers.json`)
+      .then((r) => r.json())
+      .then((d) => {
         if (!d) return setSuggestions([]);
-        const search = custName.toLowerCase();
-        setSuggestions(Object.values(d).filter(c => c.name?.toLowerCase().includes(search)).map(c => ({ name: c.name, city: c.city })).slice(0, 10));
+
+        const search = normalize(custName);
+        const results = Object.values(d)
+          .filter((c) => normalize(c.name || '').includes(search))
+          .map((c) => ({ name: c.name, city: c.city }))
+          .slice(0, 10);
+
+        setSuggestions(results);
         setHighlightedCustIndex(-1);
-      }).catch(() => setSuggestions([]));
-    }, 200);
-  }, [custName, justSelectedCustomer]);
+      })
+      .catch(() => setSuggestions([]));
+  }, 10); // ✅ reduced delay for faster typing response
+}, [custName, justSelectedCustomer]);
+
 
   useEffect(() => {
-    if (refDebProd.current) clearTimeout(refDebProd.current);
-    if (justSelectedProduct) {
+  if (refDebProd.current) clearTimeout(refDebProd.current);
+  if (justSelectedProduct) {
     setProdSuggestions([]); // ✅ don’t refetch after selecting
     return;
   }
-    if (!productName.trim()) {
+  if (!productName.trim()) {
     setProdSuggestions([]);
     return;
   }
-  
-    setValidProduct(false);
-    refDebProd.current = setTimeout(async () => {
-      try {
-        const r = await fetch(`${URL}/products.json`), d = await r.json();
-        if (!d) return setProdSuggestions([]);
-        let searchTerm = productName.toLowerCase().replace(/\s+/g, ''); // remove spaces
-        let suggestions = Object.values(d)
-  .filter(p => p.name?.toLowerCase().replace(/\s+/g, '').includes(searchTerm))
-  .map(p => {
-    // try to match pattern like "something (10 pcs)"
-    const match = p.name.match(/\((\d+)\s*([a-zA-Z]+)\)/);
-    return {
-      name: p.name,
-      qty: match ? parseInt(match[1]) : 1,
-      unit: match ? match[2] : 'pcs',
-      price: null,
-      less: null
-    };
-  });
-        if (custName?.trim()) {
-          const sellRes = await fetch(`${URL}/sellOrders.json`), sellData = await sellRes.json();
-          if (sellData) {
-            const custOrders = Object.values(sellData).filter(o => o.customerName?.toLowerCase().trim() === custName.toLowerCase().trim());
-            custOrders.forEach(order => {
-              if (Array.isArray(order.items)) {
-                order.items.forEach(item => {
-                  const match = suggestions.find(s =>
-                    s.name.toLowerCase().replace(/\s+/g, '') === item.productName?.toLowerCase().replace(/\s+/g, '') ||
-                    s.name.toLowerCase().replace(/\s+/g, '').includes(item.productName?.toLowerCase().replace(/\s+/g, '')) ||
-                    item.productName?.toLowerCase().replace(/\s+/g, '').includes(s.name.toLowerCase().replace(/\s+/g, ''))
-                  );
 
-                  if (match) { match.price = item.price || null; match.less = item.less || null; }
-                });
+  setValidProduct(false);
+
+  // ✅ normalization function (removes special chars & spaces)
+  const normalize = str =>
+    str.toLowerCase().replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, '');
+
+  refDebProd.current = setTimeout(async () => {
+    try {
+      // ✅ fetch once
+      const [prodRes, sellRes] = await Promise.all([
+        fetch(`${URL}/products.json`),
+        fetch(`${URL}/sellOrders.json`)
+      ]);
+
+      const d = await prodRes.json();
+      const sellData = await sellRes.json();
+
+      if (!d) return setProdSuggestions([]);
+
+      const searchTerm = normalize(productName);
+      const allProducts = Object.values(d);
+
+      // ✅ Pre-normalize product names (much faster filtering)
+      const suggestions = allProducts
+        .filter(p => normalize(p.name || '').includes(searchTerm))
+        .map(p => {
+          const match = p.name.match(/\((\d+)\s*([a-zA-Z]+)\)/);
+          return {
+            name: p.name,
+            qty: match ? parseInt(match[1]) : 1,
+            unit: match ? match[2] : 'pcs',
+            price: null,
+            less: null
+          };
+        });
+
+      // ✅ Customer-specific price/less mapping
+      if (custName?.trim() && sellData) {
+        const custOrders = Object.values(sellData).filter(
+          o => o.customerName?.toLowerCase().trim() === custName.toLowerCase().trim()
+        );
+
+        custOrders.forEach(order => {
+          if (Array.isArray(order.items)) {
+            order.items.forEach(item => {
+              const match = suggestions.find(
+                s =>
+                  normalize(s.name) === normalize(item.productName || '') ||
+                  normalize(s.name).includes(normalize(item.productName || '')) ||
+                  normalize(item.productName || '').includes(normalize(s.name))
+              );
+
+              if (match) {
+                match.price = item.price || null;
+                match.less = item.less || null;
               }
             });
           }
-        }
-        setProdSuggestions(suggestions.slice(0, 10));
-        setHighlightedProdIndex(-1);
-      } catch (e) { console.error(e); setProdSuggestions([]); }
-    }, 200);
-  }, [productName, custName , justSelectedProduct]);
+        });
+      }
+
+      setProdSuggestions(suggestions.slice(0, 10));
+      setHighlightedProdIndex(-1);
+    } catch (e) {
+      console.error(e);
+      setProdSuggestions([]);
+    }
+  }, 10); // ✅ reduced delay for faster response
+}, [productName, custName, justSelectedProduct]);
+
 
   useEffect(() => {
   if (!productName.trim()) {
@@ -451,6 +495,7 @@ const items = newItems.map(
         customerName: c.trim(),
         city: city.trim(),
         transportName: transportName.trim(),  // added here
+        note: note.trim(),
         timestamp: new Date().toLocaleString(),
         items,
         pendingOrderRows
@@ -517,6 +562,9 @@ setLessUnit(
   setSelectedProdUnit(item.unit || 'pcs');
   setEditing({ source: type, index });
 
+  setValidProduct(true);
+  setJustSelectedProduct(false);
+
   // 🔥 FIX: focus directly on Qty input instead of Product
   qtyInputRef.current?.focus();
 };
@@ -566,12 +614,12 @@ setLessUnit(
   autoComplete="off"
   className={productError ? 'input-error' : ''}
   ref={productInputRef}
-  disabled={!!editing}   // disable in update mode
 />
 
 
   {/* ✅ Only show dropdown in Add mode */}
-  {!editing && prodSuggestions.length > 0 && (
+  {prodSuggestions.length > 0 && (
+
     <ul
       className="suggestions-dropdown"
       ref={productListRef}
@@ -791,6 +839,22 @@ setLessUnit(
                 </tbody>
               </table>
             </div>
+            <div style={{ marginTop: "15px", marginBottom: "10px" }}>
+  <label style={{ fontWeight: "bold", marginRight: "8px" }}>Note:</label>
+  <input
+    type="text"
+    value={note || ""}
+    onChange={(e) => setNote(e.target.value)}
+    placeholder="Enter note (optional)"
+    style={{
+      padding: "6px 10px",
+      borderRadius: "6px",
+      border: "1px solid #ccc",
+      width: "60%",
+    }}
+  />
+</div>
+
 
             <button onClick={() => placeOrder(custName)} disabled={loading}>
   {loading ? <div className="loader"></div> : "Place Order"}

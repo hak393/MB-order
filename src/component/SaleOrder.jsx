@@ -1,8 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { query, orderByChild, equalTo } from "firebase/database"; // at top
-import { getDatabase, ref, onValue, update, get, remove, push} from 'firebase/database'; // ⬅ added get
+import { getDatabase, set, ref, onValue, update, get, remove, push } from 'firebase/database'; // ⬅ added get
 import './Style.css';
+import SellAddProduct from './SellAddProduct';
+
+
 
 const firebaseConfig = { databaseURL: 'https://mb-order-3764e-default-rtdb.firebaseio.com/' };
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
@@ -44,15 +47,79 @@ const SellOrder = () => {
   const [lastChallanNo, setLastChallanNo] = useState("00"); // ✅ new state
   const [editingOrder, setEditingOrder] = useState(null);
   const [editItems, setEditItems] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterMonth, setFilterMonth] = useState("");
+  const [filteredPartyOrders, setFilteredPartyOrders] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const [filterYear, setFilterYear] = useState("");
+  const [customerList, setCustomerList] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+
+  const [expandedOrder, setExpandedOrder] = useState(null);
   const [selectedDate, setSelectedDate] = useState(() => {
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, '0');
-  const dd = String(today.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-});
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  });
 
   const printRefs = useRef({});
+
+  const [activeOrderId, setActiveOrderId] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  const [addOrder, setAddOrder] = useState(null);
+  useEffect(() => {
+    const addOrderRef = ref(db, 'AddSellOrder');
+    const unsubscribe = onValue(addOrderRef, (snapshot) => {
+      setAddOrder(snapshot.val());
+    });
+    return () => unsubscribe(); // cleanup listener
+  }, []);
+
+
+  // --- Add button handler ---
+  const handleAddOrder = async (orderId) => {
+    try {
+      await set(ref(db, `AddSellOrder/${orderId}`), true);
+      setActiveOrderId(orderId);
+      setShowAddModal(true);
+    } catch (err) {
+      console.error("Error adding order:", err);
+    }
+  };
+
+  // --- Close modal handler ---
+  const handleCloseModal = async () => {
+    try {
+      if (activeOrderId) {
+        await remove(ref(db, `AddSellOrder/${activeOrderId}`));
+        setActiveOrderId(null);
+      }
+      setShowAddModal(false);
+    } catch (err) {
+      console.error("Error closing modal:", err);
+    }
+  };
+
+  useEffect(() => {
+    const customersRef = ref(db, "customers");
+
+    onValue(customersRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.val();
+        const formatted = Object.keys(data).map((id) => ({
+          id,
+          ...data[id],
+        }));
+        setCustomerList(formatted);
+      }
+    });
+  }, []);
+
 
   useEffect(() => {
     const sellOrdersRef = ref(db, 'sellOrders');
@@ -66,35 +133,67 @@ const SellOrder = () => {
 
       const monthMap = {};
       const withChallan = formatted.map((order) => {
-  if (!order.challanNo) {
-    // only assign a challan number if missing
-    const date = new Date(order.timestamp);
-    const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
-    monthMap[monthKey] = (monthMap[monthKey] || 0) + 1;
-    const challanNo = monthMap[monthKey].toString().padStart(2, '0');
+        if (!order.challanNo) {
+          // only assign a challan number if missing
+          const date = new Date(order.timestamp);
+          const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
+          monthMap[monthKey] = (monthMap[monthKey] || 0) + 1;
+          const challanNo = monthMap[monthKey].toString().padStart(2, '0');
 
-    update(ref(db, `sellOrders/${order.id}`), { challanNo });
-    return { ...order, challanNo };
-  }
+          update(ref(db, `sellOrders/${order.id}`), { challanNo });
+          return { ...order, challanNo };
+        }
 
-  // ✅ keep existing challan number
-  return order;
-});
+        // ✅ keep existing challan number
+        return order;
+      });
+
+
+
 
 
       // ✅ Get the last challan number (max challanNo across all)
+      // ✅ Get the last challan number (max challanNo across all)
       if (withChallan.length > 0) {
-  const maxChallan = Math.max(
-    ...withChallan.map(o => parseInt(o.challanNo, 10) || 0)
-  );
-  setLastChallanNo(maxChallan.toString().padStart(2, "0"));
-  // ✅ also update challanCounter section in Firebase
-  update(ref(db, "challanCounter"), { lastNo: maxChallan });
-} else {
-  setLastChallanNo("00");
-  // ✅ when last challan is zero, update challanCounter in Firebase too
-  update(ref(db, "challanCounter"), { lastNo: 0 });
-}
+        const today = new Date();
+
+        // Find the latest challan entry
+        const latestOrder = withChallan.reduce((latest, current) => {
+          return new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest;
+        });
+
+        const latestDate = new Date(latestOrder.timestamp);
+        const sameMonth =
+          latestDate.getMonth() === today.getMonth() &&
+          latestDate.getFullYear() === today.getFullYear();
+
+        let maxChallan = 0;
+
+        if (sameMonth) {
+          // ✅ Continue same month's challan numbering
+          maxChallan = Math.max(
+            ...withChallan
+              .filter(o => {
+                const d = new Date(o.timestamp);
+                return (
+                  d.getMonth() === today.getMonth() &&
+                  d.getFullYear() === today.getFullYear()
+                );
+              })
+              .map(o => parseInt(o.challanNo, 10) || 0)
+          );
+        } else {
+          // ✅ New month → reset to 0
+          maxChallan = 0;
+          update(ref(db, "challanCounter"), { lastNo: 0 });
+        }
+
+        // ✅ Always update UI challan display
+        setLastChallanNo(maxChallan.toString().padStart(2, "0"));
+      } else {
+        setLastChallanNo("00");
+        update(ref(db, "challanCounter"), { lastNo: 0 });
+      }
 
 
       withChallan.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -105,84 +204,85 @@ const SellOrder = () => {
 
   const handlePrint = async (id) => {
     // ✅ Decode HTML entities like &amp;, &nbsp;, etc.
-const decodeHTML = (text) => {
-  const temp = document.createElement("textarea");
-  temp.innerHTML = text;
-  return temp.value;
-};
+    const decodeHTML = (text) => {
+      const temp = document.createElement("textarea");
+      temp.innerHTML = text;
+      return temp.value;
+    };
 
-  const content = printRefs.current[id];
-  if (!content) return;
-  const printCopies = ["Original Copy", "Duplicate Copy"];
+    const content = printRefs.current[id];
+    if (!content) return;
+    const printCopies = ["Original Copy", "Duplicate Copy"];
 
-  // ✅ Find the order object from state
-  const order = sellOrders.find(o => o.id === id);
+    // ✅ Find the order object from state
+    const order = sellOrders.find(o => o.id === id);
 
-  // ✅ Extract customer name & city from header
-  const headerDiv = content.querySelector(".order-header");
-  const headerText = headerDiv.innerHTML
-    .replace(/<strong>User:<\/strong>.*?<br\s*\/?>/i, ""); // remove User
+    // ✅ Extract customer name & city from header
+    const headerDiv = content.querySelector(".order-header");
+    const headerText = headerDiv.innerHTML
+      .replace(/<strong>User:<\/strong>.*?<br\s*\/?>/i, ""); // remove User
 
-  const customerMatch = headerText.match(/<strong>Customer:<\/strong>\s*([^<]+)<br\s*\/?>/i);
-  const cityMatch = headerText.match(/<strong>City:<\/strong>\s*([^<]+)<br\s*\/?>/i);
+    const customerMatch = headerText.match(/<strong>Customer:<\/strong>\s*([^<]+)<br\s*\/?>/i);
+    const cityMatch = headerText.match(/<strong>City:<\/strong>\s*([^<]+)<br\s*\/?>/i);
 
-  const customerName = customerMatch ? customerMatch[1].trim() : "";
-  const city = cityMatch ? cityMatch[1].trim() : "";
+    const customerName = customerMatch ? customerMatch[1].trim() : "";
+    const city = cityMatch ? cityMatch[1].trim() : "";
 
-  // ✅ Fetch phone number from Firebase
-  let phoneNumber = "-";
-  try {
-    const customersRef = ref(db, "customers");
-    const snap = await get(customersRef);
-    if (snap.exists()) {
-      const customers = snap.val();
-      const found = Object.values(customers).find(
-  (c) =>
-    decodeHTML(c.name)?.trim().toLowerCase() ===
-      decodeHTML(customerName)?.trim().toLowerCase() &&
-    decodeHTML(c.city)?.trim().toLowerCase() ===
-      decodeHTML(city)?.trim().toLowerCase()
-);
+    // ✅ Fetch phone number from Firebase
+    let phoneNumber = "-";
+    try {
+      const customersRef = ref(db, "customers");
+      const snap = await get(customersRef);
+      if (snap.exists()) {
+        const customers = snap.val();
+        const found = Object.values(customers).find(
+          (c) =>
+            decodeHTML(c.name)?.trim().toLowerCase() ===
+            decodeHTML(customerName)?.trim().toLowerCase() &&
+            decodeHTML(c.city)?.trim().toLowerCase() ===
+            decodeHTML(city)?.trim().toLowerCase()
+        );
 
 
-      if (found?.number) phoneNumber = found.number;
+        if (found?.number) phoneNumber = found.number;
+      }
+    } catch (err) {
+      console.error("Error fetching phone:", err);
     }
-  } catch (err) {
-    console.error("Error fetching phone:", err);
-  }
 
-  // ✅ Fetch transport name from Firebase sellOrders
-  let transportName = "-";
-  try {
-    const ordersRef = ref(db, "sellOrders");
-    const snap = await get(ordersRef);
-    if (snap.exists()) {
-      const orders = snap.val();
-      const foundOrder = Object.values(orders).find(
-  (o) =>
-    decodeHTML(o.customerName)?.trim().toLowerCase() ===
-      decodeHTML(customerName)?.trim().toLowerCase() &&
-    decodeHTML(o.city)?.trim().toLowerCase() ===
-      decodeHTML(city)?.trim().toLowerCase()
-);
+    // ✅ Fetch transport name from Firebase sellOrders
+    let transportName = "-";
+    try {
+      const ordersRef = ref(db, "sellOrders");
+      const snap = await get(ordersRef);
+      if (snap.exists()) {
+        const orders = snap.val();
+        const foundOrder = Object.values(orders).find(
+          (o) =>
+            decodeHTML(o.customerName)?.trim().toLowerCase() ===
+            decodeHTML(customerName)?.trim().toLowerCase() &&
+            decodeHTML(o.city)?.trim().toLowerCase() ===
+            decodeHTML(city)?.trim().toLowerCase()
+        );
 
 
-      if (foundOrder?.transportName) transportName = foundOrder.transportName;
+        if (foundOrder?.transportName) transportName = foundOrder.transportName;
+      }
+    } catch (err) {
+      console.error("Error fetching transport name:", err);
     }
-  } catch (err) {
-    console.error("Error fetching transport name:", err);
-  }
 
-  // ✅ Build header HTML
-  const orderDate = order.timestamp || order.date || order.createdAt || ""; 
-let formattedDate = "-";
+    // ✅ Build header HTML
+    const orderDate = order.timestamp || order.date || order.createdAt || "";
+    let formattedDate = "-";
 
-if (orderDate) {
-  const d = new Date(orderDate);
-  formattedDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
-}
+    if (orderDate) {
+      const d = new Date(orderDate);
+      formattedDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+    }
 
-  const headerHTML = `
+
+    const headerHTML = `
     <div style="display:flex; justify-content:space-between; width:100%; font-size:20px;">
       <div><strong>Customer:</strong> ${customerName}</div>
       <div><strong>Challan No.:</strong> ${order.challanNo || '-'}</div>
@@ -197,167 +297,316 @@ if (orderDate) {
     </div>
   `;
 
-  // ✅ Build table rows
-  const rows = Array.from(content.querySelectorAll("tbody tr"));
-  const tbodyHTML = rows
-    .map((row, idx) => {
-      const cells = row.querySelectorAll("td");
-      if (cells.length < 6) return "";
+    // ✅ Build table rows
+    // ✅ Build table rows with 15 items per page
+    // ✅ Build table rows with 15 items per page
+    const rows = Array.from(content.querySelectorAll("tbody tr"));
 
-      const product = cells[0].innerHTML.replace(/\s*\(.*?\)/g, "").trim();
-      const soldQty = cells[1].innerHTML;
-      const weightValue = parseFloat(cells[2].innerHTML);
-const weight = isNaN(weightValue) ? "" : weightValue.toFixed(3);
- // ✅ always 3 decimal places
-      const less = cells[3].innerHTML.replace(/₹/g, "");
-      const price = cells[4].innerHTML.replace(/₹/g, "");
-      const packet = cells[5].innerHTML;
-
-      return `<tr>
-        <td>${idx + 1}</td>
-        <td>${product}</td>
-        <td>${soldQty}</td>
-        <td>${weight}</td>
-        <td>${price}</td>
-        <td>${less}</td>
-        <td>${packet}</td>
-      </tr>`;
-    })
-    .join("");
-
-  const printWindow = window.open("", "", "width=900,height=650");
-  if (!printWindow) {
-    alert("Popup blocked! Please allow popups for this site.");
-    return;
-  }
-
-  printWindow.document.write(`
-    <html>
-      <head>
-        <title>Packing Slip</title>
-        <style>
-  @page { size: A5 landscape; margin: 10mm; }
-  thead { display: table-header-group; }
-  body { font-family: Arial, sans-serif; padding: 20px; transform: scale(0.85); transform-origin: top left; }
-  h2 { text-align: center; margin-bottom: 5px; }
-  .copy-title { text-align:center; font-size:14px; font-weight:bold; margin-bottom:10px; }
-  .order-header { margin-bottom: 15px; font-size: 14px; line-height: 1.5; }
-  table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
-  th, td { border: 1px solid #000; padding: 6px; text-align: center; }
-  /* ✅ Original Copy page numbering */
-  .original .page-number:after { counter-increment: page; content: "Page " counter(page); }
-  /* ✅ Duplicate Copy uses same page number as original */
-  .duplicate .page-number:after { content: attr(data-page); }
-</style>
-
-      </head>
-      <body>
-        <!-- Original Copy -->
-        <div class="copy-title">Original Copy</div>
-        <div class="original">
-  <table>
-    <thead>
-      <tr>
-        <th colspan="7">
-          <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
-            <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
-            <span class="page-number" style="position:absolute; right:0;"></span>
-          </div>
-        </th>
-      </tr>
-            <tr>
-              <th colspan="7"><div class="order-header">${headerHTML}</div></th>
-            </tr>
-            <tr>
-              <th>Sr No.</th>
-              <th>Product</th>
-              <th>Qty</th>
-              <th>Weight</th>
-              <th>Price</th>
-              <th>Less</th>
-              <th>Packet</th>
-            </tr>
-          </thead>
-          <tbody>${tbodyHTML}</tbody>
-          </table>
-</div>
-
-        <div style="page-break-before: always;"></div>
-
-        <!-- Duplicate Copy -->
-        <div class="copy-title">Duplicate Copy</div>
-        <div class="duplicate">
-  <table>
-    <thead>
-      <tr>
-        <th colspan="7">
-          <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
-            <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
-            <span class="page-number" style="position:absolute; right:0;" data-page="Page 1"></span>
-          </div>
-        </th>
-      </tr>
-            <tr>
-              <th colspan="7"><div class="order-header">${headerHTML}</div></th>
-            </tr>
-            <tr>
-              <th>Sr No.</th>
-              <th>Product</th>
-              <th>Qty</th>
-              <th>Weight</th>
-              <th>Price</th>
-              <th>Less</th>
-              <th>Packet</th>
-            </tr>
-          </thead>
-          <tbody>${tbodyHTML}</tbody>
-       </table>
-</div>
-      </body>
-      <script>
-        window.onload = () => {
-          window.print();
-          window.onafterprint = () => window.close();
-        };
-      </script>
-    </html>
-  `);
-
-  printWindow.document.close();
-};
-
-
-
-const handleEdit = async (order) => {
-  setEditingOrder(order);
-
-  const updatedItems = await Promise.all(order.items.map(async (item) => {
-    // Use existing kgRate from Firebase
-    const existingKgRate = item.kgRate || "";
-
-    // Fallback: fetch from products if needed
-    if (!existingKgRate && item.productName) {
-      try {
-        const productsQuery = query(
-          ref(db, "products"),
-          orderByChild("name"),
-          equalTo(item.productName.trim())
-        );
-        const snap = await get(productsQuery);
-        if (snap.exists()) {
-          const productData = Object.values(snap.val())[0];
-          return { ...item, kgRate: productData.kgRate || "" };
-        }
-      } catch (err) {
-        console.error("Error fetching kgRate:", err);
+    // Split rows into groups of 15
+    const chunkRows = (arr, size) => {
+      const result = [];
+      for (let i = 0; i < arr.length; i += size) {
+        result.push(arr.slice(i, i + size));
       }
+      return result;
+    };
+    const rowChunks = chunkRows(rows, 15);
+
+    // ✅ Build page-wise HTML (15 rows per page)
+    const tbodyHTML = rowChunks
+      .map((chunk, pageIndex) => {
+        const pageRows = chunk
+          .map((row, idx) => {
+            const cells = row.querySelectorAll("td");
+            if (cells.length < 6) return "";
+
+            const product = cells[0].innerHTML.replace(/\s*\(.*?\)/g, "").trim();
+            const soldQty = cells[1].innerHTML;
+            const weightValue = parseFloat(cells[2].innerHTML);
+            const weight = isNaN(weightValue) ? "" : weightValue.toFixed(3);
+            const less = cells[3].innerHTML.replace(/₹/g, "");
+            const price = cells[4].innerHTML.replace(/₹/g, "");
+            const packet = cells[5].innerHTML;
+
+            return `<tr>
+          <td>${idx + 1 + pageIndex * 15}</td>
+          <td>${product}</td>
+          <td>${soldQty}</td>
+          <td>${weight}</td>
+          <td>${price}</td>
+          <td>${less}</td>
+          <td>${packet}</td>
+        </tr>`;
+          })
+          .join("");
+
+        // ✅ Insert page-break only between internal pages (not after the last one)
+        return `
+  <tbody style="${pageIndex > 0 ? 'margin-top:40px;' : ''}">
+    ${pageRows}
+  </tbody>
+  ${pageIndex < rowChunks.length - 1 ? '<tr style="page-break-after: always;"></tr>' : ""}
+`;
+
+      })
+      .join("");
+
+
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "none";
+    document.body.appendChild(iframe);
+    const printWindow = iframe.contentWindow;
+
+    if (!printWindow) {
+      alert("Popup blocked! Please allow popups for this site.");
+      return;
     }
 
-    return { ...item, kgRate: existingKgRate };
-  }));
+    printWindow.document.write(`
+<html>
+  <head>
+    <title>Packing Slip</title>
+    <style>
+      @page { size: A5 landscape; margin: 0; }
 
-  setEditItems(updatedItems);
+  @page {
+  
+    size: A5 landscape ; /* or landscape */
+    margin: 0;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  tbody tr {
+    page-break-inside: avoid !important;
+  }
+    thead tr.copy-title-row {
+    display: table-row !important;
+}
+    
+}
+/* Force copy title to repeat on every page */
+thead tr.copy-title-row {
+    display: table-row !important;
+    text-align: center;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+
+
+      
+      thead { 
+        display: table-header-group;
+      }
+
+      tfoot {
+        display: table-footer-group;
+        
+      }
+
+      body,
+      .original,
+      .duplicate {
+        font-family: Arial, sans-serif;
+        margin: 5mm 8mm 0 8mm;
+        padding: 0;
+        transform: none;
+        transform-origin: top left;
+        width: 100%;
+      }
+
+      .print-wrapper {
+        width: 95%;
+        margin: 0 auto;
+      }
+
+      h2 { text-align: center; margin-bottom: 5px; }
+
+      .copy-title {
+        margin-top: 20px;
+        text-align: center;
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 10px;
+      }
+
+      .header-repeat {
+        display: table-header-group;
+      }
+
+      .order-header,
+      .original,
+      .duplicate {
+      
+        margin-bottom: 10px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      table {
+        width: 90%;
+        border-collapse: collapse;
+        margin: 0;
+        font-size: 14px;
+      }
+
+      th, td {
+        margin-bottom: 12px;
+        border: 1px solid #000;
+        padding: 2px;
+        text-align: center;
+      }
+
+      .original .page-number::after {
+        counter-increment: page;
+        content: "Page " counter(page);
+      }
+
+      .duplicate .page-number::after {
+        content: attr(data-page);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Original Copy -->
+    <div class="copy-title">Original Copy</div>
+    <div class="page-block">
+  <div class="original">
+      <table>
+        <thead>
+          <tr>
+            <th colspan="7">
+              <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
+                <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
+                <span class="page-number" style="position:absolute; right:0;"></span>
+              </div>
+            </th>
+          </tr>
+          <tr>
+            <th colspan="7"><div style="margin-bottom:10px;" class="order-header">${headerHTML}</div></th>
+          </tr>
+          <tr>
+            <th>Sr No.</th>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Weight</th>
+            <th>Price</th>
+            <th>Less</th>
+            <th>Packet</th>
+          </tr>
+        </thead>
+        <tbody>${tbodyHTML}</tbody>
+      </table>
+      <div style="page-break-after: always;"></div>
+    </div>
+    </div>
+
+    <div style="page-break-before: always;"></div>
+
+    <!-- Duplicate Copy -->
+    <div class="copy-title">Duplicate Copy</div>
+    <div class="page-block">
+  <div class="duplicate">
+      <table>
+        <thead>
+        <tr>
+          <tr>
+            <th colspan="7">
+              <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
+                <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
+                <span class="page-number" style="position:absolute; right:0;" data-page="Page 1"></span>
+              </div>
+            </th>
+          </tr>
+          <tr>
+            <th colspan="7"><div class="order-header">${headerHTML}</div></th>
+          </tr>
+          <tr>
+            <th>Sr No.</th>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Weight</th>
+            <th>Price</th>
+            <th>Less</th>
+            <th>Packet</th>
+          </tr>
+        </thead>
+        <tbody>${tbodyHTML}</tbody>
+      </table>
+      <div style="page-break-after: always;"></div>
+    </div>
+    </div>
+
+    <script>
+      // ✅ Works on both desktop and mobile browsers
+      window.onload = () => {
+  setTimeout(() => {
+    try {
+      window.print();
+    } catch (e) {
+      alert("Please use your browser’s share or print option manually.");
+    }
+  }, 800); // small delay helps mobile preview load
 };
+
+
+      window.onafterprint = () => {
+        setTimeout(() => document.body.removeChild(iframe), 2000);
+      };
+    </script>
+  </body>
+</html>
+`);
+
+    printWindow.document.close();
+
+  };
+
+
+
+  const handleEdit = async (order) => {
+    setEditingOrder(order);
+
+    const updatedItems = await Promise.all(order.items.map(async (item) => {
+      // Use existing kgRate from Firebase
+      const existingKgRate = item.kgRate || "";
+
+      // Fallback: fetch from products if needed
+      if (!existingKgRate && item.productName) {
+        try {
+          const productsQuery = query(
+            ref(db, "products"),
+            orderByChild("name"),
+            equalTo(item.productName.trim())
+          );
+          const snap = await get(productsQuery);
+          if (snap.exists()) {
+            const productData = Object.values(snap.val())[0];
+            return { ...item, kgRate: productData.kgRate || "" };
+          }
+        } catch (err) {
+          console.error("Error fetching kgRate:", err);
+        }
+      }
+
+      return { ...item, kgRate: existingKgRate };
+    }));
+
+    setEditItems(updatedItems);
+  };
 
 
 
@@ -393,54 +642,92 @@ const handleEdit = async (order) => {
     setEditItems(updated);
   };
 
-const handleSave = async () => {
-  if (!editingOrder) return;
-
-  const orderRef = ref(db, `sellOrders/${editingOrder.id}`);
-
-  // Loop through edited items and check qty changes
-  for (let i = 0; i < editItems.length; i++) {
-    const item = editItems[i];
-    const oldQty = editingOrder.items[i]?.soldQty || 0; // old sold qty
-    const newQty = parseFloat(item.soldQty) || 0;
-
-    // ✅ If qty reduced, move difference to pendingOrders
-    if (newQty < oldQty) {
-      const remainingQty = oldQty - newQty;
-
-      const pendingData = {
-        city: editingOrder.city,
-        customerName: editingOrder.customerName,
-        kgrate: "",
-        less: item.less || "",
-        packet: "",
-        price: item.price || "",
-        productName: item.productName || "",
-        remainingQty: remainingQty,
-        soldQty: 0,
-        timestamp: new Date().toISOString(),
-        unit: item.unit || "",
-        user: editingOrder.user || ""
-      };
-
-      // ✅ Push remaining as new pending order
-      await push(ref(db, "pendingOrders"), pendingData);
+  const handleSearch = () => {
+    if (!searchTerm) {
+      setIsSearching(false);   // ✅ exit manual search
+      setFilteredPartyOrders([]);
+      return;
     }
-  }
 
-  // ✅ Now update the main sellOrder with new soldQty values
-  await update(orderRef, { items: editItems });
+    if (!filterMonth || !filterYear) {
+      alert("Select customer + month/year");
+      return;
+    }
 
-  // ✅ Close editor
-  setEditingOrder(null);
-  setEditItems([]);
-};
+
+    setIsSearching(true);   // ✅ enable search mode
+
+    const results = sellOrders.filter(order => {
+      const orderDate = new Date(order.timestamp);
+      const orderMonth = String(orderDate.getMonth() + 1).padStart(2, "0");
+      const orderYear = orderDate.getFullYear();
+
+      return (
+        order.customerName?.toLowerCase() === searchTerm.toLowerCase() &&
+        orderMonth === filterMonth &&
+        orderYear == filterYear
+      );
+    });
+
+    setFilteredPartyOrders(results);
+  };
+
+
+
+
+  const handleSave = async () => {
+    if (!editingOrder) return;
+
+    const orderRef = ref(db, `sellOrders/${editingOrder.id}`);
+
+    // Loop through edited items and check qty changes
+    for (let i = 0; i < editItems.length; i++) {
+      const item = editItems[i];
+      const oldQty = editingOrder.items[i]?.soldQty || 0; // old sold qty
+      const newQty = parseFloat(item.soldQty) || 0;
+
+      // ✅ If qty reduced, move difference to pendingOrders
+      if (newQty < oldQty) {
+        const remainingQty = oldQty - newQty;
+
+        const pendingData = {
+          city: editingOrder.city,
+          customerName: editingOrder.customerName,
+          kgrate: "",
+          less: item.less || "",
+          packet: "",
+          price: item.price || "",
+          productName: item.productName || "",
+          remainingQty: remainingQty,
+          soldQty: 0,
+          timestamp: new Date().toISOString(),
+          unit: item.unit || "",
+          user: editingOrder.user || ""
+        };
+
+        // ✅ Push remaining as new pending order
+        await push(ref(db, "pendingOrders"), pendingData);
+      }
+    }
+
+    // ✅ Now update the main sellOrder with new soldQty values
+    await update(orderRef, { items: editItems });
+
+    // ✅ Close editor
+    setEditingOrder(null);
+    setEditItems([]);
+  };
 
 
   const handleCancel = () => {
     setEditingOrder(null);
     setEditItems([]);
   };
+
+  const filteredCustomers = customerList.filter((cust) =>
+    cust.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
 
   const filteredOrders = sellOrders.filter(order => {
     const orderDate = new Date(order.timestamp).toISOString().slice(0, 10);
@@ -450,13 +737,113 @@ const handleSave = async () => {
   return (
     <div className="orderpage-container">
       <h2 style={{ textAlign: 'center' }}>SELL ORDERS</h2>
-
       <div style={{ textAlign: 'center', marginBottom: '10px', fontSize: '18px' }}>
         Last Challan No.: <strong>{lastChallanNo}</strong>
       </div>
 
 
       <div className="date-picker-container">
+        <div
+          style={{
+            margin: "10px 0",
+            display: "flex",
+            justifyContent: "center",   // ✅ center horizontally
+            gap: "10px"
+          }}
+        >
+          <div style={{ position: "relative" }}>
+            <input
+              type="text"
+              placeholder="Search by customer"
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setShowSuggestions(true);
+              }}
+              style={{ padding: "6px 10px" }}
+            />
+
+            {/* ✅ Suggestion Dropdown */}
+            {showSuggestions && searchTerm && filteredCustomers.length > 0 && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "38px",
+                  left: 0,
+                  width: "100%",
+                  background: "white",
+                  border: "1px solid #ccc",
+                  zIndex: 1000,
+                  maxHeight: "200px",
+                  overflowY: "auto",
+                }}
+              >
+                {filteredCustomers.map((cust) => (
+                  <div
+                    key={cust.id}
+                    style={{
+                      padding: "6px 10px",
+                      cursor: "pointer",
+                      borderBottom: "1px solid #eee",
+                    }}
+                    onClick={() => {
+                      setSearchTerm(cust.name);
+                      setShowSuggestions(false);
+                    }}
+                  >
+                    <strong>{cust.name}</strong> — {cust.city}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <select
+            value={`${filterMonth}-${filterYear}`}
+            onChange={(e) => {
+              const [month, year] = e.target.value.split("-");
+              setFilterMonth(month);
+              setFilterYear(year);
+            }}
+            style={{
+              padding: "8px 14px",
+              border: "1px solid #666",
+              borderRadius: "6px",
+              background: "#f9fafb",
+              cursor: "pointer",
+              fontSize: "14px",
+              fontWeight: 500,
+              color: "#333",
+              outline: "none",
+              boxShadow: "0px 1px 4px rgba(0,0,0,0.15)",
+              transition: "all 0.2s ease"
+            }}
+            onMouseOver={(e) => (e.target.style.background = "#f1f1f1")}
+            onMouseOut={(e) => (e.target.style.background = "#f9fafb")}
+            onFocus={(e) => (e.target.style.border = "1px solid #3b82f6")}
+            onBlur={(e) => (e.target.style.border = "1px solid #666")}
+          >
+            <option value="">Select Month & Year</option>
+
+            {Array.from({ length: 24 }, (_, i) => {
+              const date = new Date();
+              date.setMonth(date.getMonth() - i);
+
+              const month = String(date.getMonth() + 1).padStart(2, "0");
+              const year = date.getFullYear();
+
+              return (
+                <option key={`${month}-${year}`} value={`${month}-${year}`}>
+                  {month} / {year}
+                </option>
+              );
+            })}
+          </select>
+          <button onClick={handleSearch}>Search</button>
+
+        </div>
+
+
         <label>Select Date:</label>
         <input
           type="date"
@@ -465,16 +852,67 @@ const handleSave = async () => {
         />
       </div>
 
-      {filteredOrders.length === 0 ? (
-        <p style={{ textAlign: 'center' }}>No sell orders found for selected date.</p>
+      {(isSearching ? filteredPartyOrders : filteredOrders).length === 0 ? (
+        <p style={{ textAlign: 'center' }}>
+          {isSearching ? "No orders found for selected customer/month" : "No sell orders found for selected date."}
+        </p>
       ) : (
-        filteredOrders.map((order) => (
+        (isSearching ? filteredPartyOrders : filteredOrders).map((order) => (
           <div key={order.id} className="order-card new">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
-                CHALLAN NO. : {order.challanNo}
-              </div>
+
               <div>
+                <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
+                  CHALLAN NO. : {order.challanNo}
+                </div>
+                <div style={{ fontSize: '14px', marginTop: '4px', lineHeight: '20px' }}>
+                  <strong>Customer:</strong> {order.customerName} <br />
+                  <strong>City:</strong> {order.city} <br />
+                  <strong>Transport:</strong> {order.transportName || '-'} <br />
+                  <strong>User:</strong> {order.user} <br />
+                  <strong>Date:</strong> {(() => {
+                    const ts = order.timestamp;
+                    const [datePart, timePart] = ts.split("T");
+                    const [year, month, day] = datePart.split("-");
+                    const [hour, minute] = timePart.split(":");
+                    let hours = parseInt(hour);
+                    const minutesStr = minute;
+                    const ampm = hours >= 12 ? "PM" : "AM";
+                    hours = hours % 12;
+                    if (hours === 0) hours = 12;
+                    return `${day}/${month}/${year} ${hours}:${minutesStr} ${ampm}`;
+                  })()}
+                </div>
+              </div>
+
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                {addOrder && addOrder[order.id] ? (
+                  <span style={{ color: 'red', fontWeight: 'bold' }}>ADDING</span>
+                ) : addOrder && Object.keys(addOrder).length > 0 ? null : (
+                  <button
+                    style={{
+                      background: 'orange',
+                      color: 'white',
+                      padding: '5px 10px'
+                    }}
+                    onClick={() => handleAddOrder(order.id)}
+                  >
+                    Add
+                  </button>
+                )}
+
+
+                <button
+                  style={{ padding: '5px 10px' }}
+                  onClick={() =>
+                    setExpandedOrder(prev => (prev === order.id ? null : order.id))
+                  }
+                >
+                  {expandedOrder === order.id ? '▲' : '▼'}
+                </button>
+
+
                 <button
                   style={{ background: 'blue', color: 'white', marginRight: '8px', padding: '5px 10px' }}
                   onClick={() => handleEdit(order)}
@@ -488,10 +926,10 @@ const handleSave = async () => {
                   Print
                 </button>
                 <button
-  style={{ background: 'red', color: 'white', padding: '5px 10px', marginLeft: '8px' }}
-  onClick={() => {
-    const confirmBox = document.createElement("div");
-    confirmBox.innerHTML = `
+                  style={{ background: 'red', color: 'white', padding: '5px 10px', marginLeft: '8px' }}
+                  onClick={() => {
+                    const confirmBox = document.createElement("div");
+                    confirmBox.innerHTML = `
       <div style="
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: rgba(0,0,0,0.6); display: flex;
@@ -516,82 +954,81 @@ const handleSave = async () => {
         </div>
       </div>
     `;
-    document.body.appendChild(confirmBox);
+                    document.body.appendChild(confirmBox);
 
-    document.getElementById("confirmYes").onclick = () => {
-      // ✅ Only remove this order, do NOT update challanCounter or other orders
-      remove(ref(db, `sellOrders/${order.id}`));
-      document.body.removeChild(confirmBox);
-    };
+                    document.getElementById("confirmYes").onclick = () => {
+                      // ✅ Only remove this order, do NOT update challanCounter or other orders
+                      remove(ref(db, `sellOrders/${order.id}`));
+                      document.body.removeChild(confirmBox);
+                    };
 
-    document.getElementById("confirmNo").onclick = () => {
-      document.body.removeChild(confirmBox);
-    };
-  }}
->
-  Delete
-</button>
-
-
+                    document.getElementById("confirmNo").onclick = () => {
+                      document.body.removeChild(confirmBox);
+                    };
+                  }}
+                >
+                  Delete
+                </button>
 
               </div>
             </div>
 
-            <div ref={(el) => (printRefs.current[order.id] = el)}>
-              <div className="order-header">
-                <div>
-                  <strong>User:</strong> {order.user} <br />
-                  <strong>Customer:</strong> {order.customerName} <br />
-                  <strong>City:</strong> {order.city} <br />
-                  <strong>Transport:</strong> {order.transportName || '-'} <br />
-                  <strong>Date:</strong> {(() => {
-  const ts = order.timestamp; // "2025-10-24T06:58:00.156Z"
-  
-  // Extract date and time from the string directly
-  const [datePart, timePart] = ts.split("T");
-  const [year, month, day] = datePart.split("-");
-  const [hour, minute] = timePart.split(":");
-  
-  // Optional: convert to 12-hour format
-  let hours = parseInt(hour);
-  const minutesStr = minute;
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12;
-  if (hours === 0) hours = 12;
+            {expandedOrder === order.id && (
+              <div ref={(el) => (printRefs.current[order.id] = el)}>
+                <div className="order-header">
+                  <div
+                    className="print-only"
+                    style={{ fontSize: '14px', marginTop: '4px', lineHeight: '20px' }}
+                  >
+                    <strong>Customer:</strong> {order.customerName} <br />
+                    <strong>City:</strong> {order.city} <br />
+                    <strong>Transport:</strong> {order.transportName || '-'} <br />
+                    <strong>User:</strong> {order.user} <br />
+                    <strong>Date:</strong> {(() => {
+                      const ts = order.timestamp;
+                      const [datePart, timePart] = ts.split("T");
+                      const [year, month, day] = datePart.split("-");
+                      const [hour, minute] = timePart.split(":");
+                      let hours = parseInt(hour);
+                      const minutesStr = minute;
+                      const ampm = hours >= 12 ? "PM" : "AM";
+                      hours = hours % 12;
+                      if (hours === 0) hours = 12;
+                      return `${day}/${month}/${year} ${hours}:${minutesStr} ${ampm}`;
+                    })()}
+                  </div>
 
-  return `${day}/${month}/${year} ${hours}:${minutesStr} ${ampm}`;
-})()}
-</div>
 
-              </div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    {/* ❌ Removed Original Qty from print */}
-                    <th>Sold Qty</th>
-                    <th>Weight</th>
-                    <th>Less</th>
-                    <th>Price</th>
-                    <th>Packet</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {order.items.map((item, i) => (
-                    <tr key={i}>
-                      <td>{item.productName}</td>
-                      <td>{item.soldQty || item.originalQty} {item.unit}</td>
-                      <td>{item.weight || '-'}</td>
-                      <td>{item.less || '-'}</td>
-                      <td>₹{item.price}</td>
-                      <td>{item.packet || '-'}</td>
-                      <td>
-                        <button
-                          style={{ background: 'red', color: 'white', padding: '3px 6px' }}
-                          onClick={() => {
-                            const confirmBox = document.createElement("div");
-                            confirmBox.innerHTML = `
+                </div>
+
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      {/* ❌ Removed Original Qty from print */}
+                      <th>Sold Qty</th>
+                      <th>Weight</th>
+                      <th>Less</th>
+                      <th>Price</th>
+                      <th>Packet</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {order.items.map((item, i) => (
+                      <tr key={i}>
+                        <td>{item.productName}</td>
+                        <td>{item.soldQty || item.originalQty} {item.unit}</td>
+                        <td>{item.weight || '-'}</td>
+                        <td>{item.less || '-'}</td>
+                        <td>₹{item.price}</td>
+                        <td>{item.packet || '-'}</td>
+                        <td>
+                          <button
+                            style={{ background: 'red', color: 'white', padding: '3px 6px' }}
+                            onClick={() => {
+                              const confirmBox = document.createElement("div");
+                              confirmBox.innerHTML = `
       <div style="
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: rgba(0,0,0,0.6); display: flex;
@@ -616,31 +1053,59 @@ const handleSave = async () => {
         </div>
       </div>
     `;
-                            document.body.appendChild(confirmBox);
+                              document.body.appendChild(confirmBox);
 
-                            document.getElementById("confirmYes").onclick = () => {
-                              const updatedItems = order.items.filter((_, idx) => idx !== i);
-                              update(ref(db, `sellOrders/${order.id}`), { items: updatedItems });
-                              document.body.removeChild(confirmBox);
-                            };
+                              document.getElementById("confirmYes").onclick = () => {
+                                const updatedItems = order.items.filter((_, idx) => idx !== i);
+                                update(ref(db, `sellOrders/${order.id}`), { items: updatedItems });
+                                document.body.removeChild(confirmBox);
+                              };
 
-                            document.getElementById("confirmNo").onclick = () => {
-                              document.body.removeChild(confirmBox);
-                            };
-                          }}
-                        >
-                          Delete
-                        </button>
+                              document.getElementById("confirmNo").onclick = () => {
+                                document.body.removeChild(confirmBox);
+                              };
+                            }}
+                          >
+                            Delete
+                          </button>
 
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         ))
       )}
+
+
+      {/* Sell Add Product Modal */}
+      {showAddModal && (
+        <div className="modal-backdrop">
+          <div
+            className="modal-box"
+            style={{
+              width: "90%",
+              height: "90%",
+              background: "#fff",
+              borderRadius: "10px",
+              zIndex: 1000,
+              overflow: "auto", // ✅ allows scrolling if content exceeds height
+            }}
+          >
+            <SellAddProduct
+              orderId={activeOrderId} // pass the selected order ID
+              onClose={handleCloseModal} // callback to close modal
+            />
+            <div style={{ textAlign: "center", marginTop: "15px" }}>
+              <button onClick={handleCloseModal}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Full Screen Edit Overlay */}
       {editingOrder && (
@@ -708,168 +1173,168 @@ const handleSave = async () => {
                         onKeyDown={(e) => handleKeyDown(e, idx, 'soldQty')}
                       />
                     </td>
-      <td>
-  <input
-    type="number"
-    min="0"
-    value={item.weight ?? ''}
-    style={{ width: '70px' }}
-    data-row={idx}
-    data-col="weight"
-    onChange={e => {
-      let val = e.target.value;
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.weight ?? ''}
+                        style={{ width: '70px' }}
+                        data-row={idx}
+                        data-col="weight"
+                        onChange={e => {
+                          let val = e.target.value;
 
-      // Prevent leading zeros like 025
-      if (val.startsWith('0') && !val.includes('.')) {
-        val = val.replace(/^0+/, '');
-      }
+                          // Prevent leading zeros like 025
+                          if (val.startsWith('0') && !val.includes('.')) {
+                            val = val.replace(/^0+/, '');
+                          }
 
-      const weight = parseFloat(val) || 0;
-      const up = [...editItems]; // your state array
-      up[idx].weight = val === '' ? '' : weight; // keep field empty if erased
-      const kgRate = parseFloat(up[idx].kgRate) || 0;
-      const sellQty = parseFloat(up[idx].soldQty) || 1;
-      up[idx].price = val === '' ? 0 : Math.ceil(weight * kgRate / sellQty); // recalc price
-      setEditItems(up);
-    }}
-    onKeyDown={(e) => handleKeyDown(e, idx, "less")}
-  />
-</td>
+                          const weight = parseFloat(val) || 0;
+                          const up = [...editItems]; // your state array
+                          up[idx].weight = val === '' ? '' : weight; // keep field empty if erased
+                          const kgRate = parseFloat(up[idx].kgRate) || 0;
+                          const sellQty = parseFloat(up[idx].soldQty) || 1;
+                          up[idx].price = val === '' ? 0 : Math.ceil(weight * kgRate / sellQty); // recalc price
+                          setEditItems(up);
+                        }}
+                        onKeyDown={(e) => handleKeyDown(e, idx, "less")}
+                      />
+                    </td>
 
                     <td>
-  <input
-    type="number"
-    min="0"
-    value={item.kgRate ?? ''}
-    style={{ width: '70px' }}
-    data-row={idx}
-    data-col="kgRate"
-    onChange={e => {
-      let val = e.target.value;
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.kgRate ?? ''}
+                        style={{ width: '70px' }}
+                        data-row={idx}
+                        data-col="kgRate"
+                        onChange={e => {
+                          let val = e.target.value;
 
-      // Prevent leading zeros like 025
-      if (val.startsWith('0') && !val.includes('.')) {
-        val = val.replace(/^0+/, '');
-      }
+                          // Prevent leading zeros like 025
+                          if (val.startsWith('0') && !val.includes('.')) {
+                            val = val.replace(/^0+/, '');
+                          }
 
-      const kgRate = parseFloat(val) || 0;
-      const up = [...editItems]; // your state array
-      up[idx].kgRate = val === '' ? '' : kgRate; // keep field empty if erased
-      const weight = parseFloat(up[idx].weight) || 0;
-      const sellQty = parseFloat(up[idx].soldQty) || 1;
-      up[idx].price = val === '' ? 0 : Math.ceil(weight * kgRate / sellQty); // recalc price
-      setEditItems(up);
-    }}
-    onKeyDown={(e) => handleKeyDown(e, idx, "less")}
-  />
-</td>
+                          const kgRate = parseFloat(val) || 0;
+                          const up = [...editItems]; // your state array
+                          up[idx].kgRate = val === '' ? '' : kgRate; // keep field empty if erased
+                          const weight = parseFloat(up[idx].weight) || 0;
+                          const sellQty = parseFloat(up[idx].soldQty) || 1;
+                          up[idx].price = val === '' ? 0 : Math.ceil(weight * kgRate / sellQty); // recalc price
+                          setEditItems(up);
+                        }}
+                        onKeyDown={(e) => handleKeyDown(e, idx, "less")}
+                      />
+                    </td>
 
 
 
                     <td>
-  {(item.less?.includes("%") || !item.less) ? (
-    // ✅ Show input + select combo when % or empty
-    <div style={{ display: "flex", alignItems: "center" }}>
-      <input
-  type="number"
-  value={item.less && item.less.includes("%") ? item.less.replace("%", "") : ""}
-  onChange={e => {
-    const up = [...editItems];
-    let val = e.target.value;
-    up[idx].less = val !== "" ? `${val}%` : "%";   // ✅ FIXED HERE
-    setEditItems(up);
-  }}
-  style={{
-    width: "60px",
-    fontSize: "14px",
-    padding: "4px",
-    border: "1px solid #ccc",
-    borderRadius: "4px 0 0 4px",
-    outline: "none"
-  }}
-  onBlur={e => {
-    const up = [...editItems];
-    let val = e.target.value;
-    if (val === "") val = "%";
-    else if (!val.includes("%")) val = `${val}%`;   // ✅ FIXED HERE
-    up[idx].less = val;
-    setEditItems(up);
-  }}
-  onKeyDown={e => handleKeyDown(e, idx, "less")}
-/>
+                      {(item.less?.includes("%") || !item.less) ? (
+                        // ✅ Show input + select combo when % or empty
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <input
+                            type="number"
+                            value={item.less && item.less.includes("%") ? item.less.replace("%", "") : ""}
+                            onChange={e => {
+                              const up = [...editItems];
+                              let val = e.target.value;
+                              up[idx].less = val !== "" ? `${val}%` : "%";   // ✅ FIXED HERE
+                              setEditItems(up);
+                            }}
+                            style={{
+                              width: "60px",
+                              fontSize: "14px",
+                              padding: "4px",
+                              border: "1px solid #ccc",
+                              borderRadius: "4px 0 0 4px",
+                              outline: "none"
+                            }}
+                            onBlur={e => {
+                              const up = [...editItems];
+                              let val = e.target.value;
+                              if (val === "") val = "%";
+                              else if (!val.includes("%")) val = `${val}%`;   // ✅ FIXED HERE
+                              up[idx].less = val;
+                              setEditItems(up);
+                            }}
+                            onKeyDown={e => handleKeyDown(e, idx, "less")}
+                          />
 
-      <select
-        value={
-          ["%", "NET", "Pair", "Full Bill", "Half Bill"].includes(item.less)
-            ? item.less
-            : "%"
-        }
-        onChange={e => {
-          const up = [...editItems];
-          const val = e.target.value;
-          if (val === "%") {
-            if (!up[idx].less || !up[idx].less.includes("%")) {
-              up[idx].less = "0%";
-            }
-          } else {
-            up[idx].less = val;
-          }
-          setEditItems(up);
-        }}
-        style={{
-          fontSize: "14px",
-          padding: "4px",
-          border: "1px solid #ccc",
-          borderLeft: "none",
-          borderRadius: "0 4px 4px 0",
-          backgroundColor: "#f9f9f9",
-          cursor: "pointer",
-          width: "90px"
-        }}
-        onKeyDown={(e) => handleKeyDown(e, idx, 'less')}
-      >
-        <option value="%">%</option>
-        <option value="NET">NET</option>
-        <option value="Pair">Pair</option>
-        <option value="Full Bill">Full Bill</option>
-        <option value="Half Bill">Half Bill</option>
-      </select>
-    </div>
-  ) : (
-    // ✅ Normal select when not %
-    <select
-      value={item.less}
-      onChange={e => {
-        const up = [...editItems];
-        if (e.target.value === "%") {
-          up[idx].less = "0%";
-        } else {
-          up[idx].less = e.target.value;
-        }
-        setEditItems(up);
-      }}
-      style={{
-        width: "120px",
-        fontSize: "14px",
-        padding: "4px",
-        borderRadius: "4px",
-        border: "1px solid #ccc",
-        backgroundColor: "#fff",
-        cursor: "pointer"
-      }}
-      onKeyDown={e => handleKeyDown(e, idx, "less")}
-    >
-      <option value="%">%</option>
-      <option value="NET">NET</option>
-      <option value="Pair">Pair</option>
-      <option value="Full Bill">Full Bill</option>
-      <option value="Half Bill">Half Bill</option>
-      {!["%", "NET", "Pair", "Full Bill", "Half Bill"].includes(item.less) && (
-        <option value={item.less}>{item.less}</option>
-      )}
-    </select>
-  )}
-</td>
+                          <select
+                            value={
+                              ["%", "NET", "Pair", "Full Bill", "Half Bill"].includes(item.less)
+                                ? item.less
+                                : "%"
+                            }
+                            onChange={e => {
+                              const up = [...editItems];
+                              const val = e.target.value;
+                              if (val === "%") {
+                                if (!up[idx].less || !up[idx].less.includes("%")) {
+                                  up[idx].less = "0%";
+                                }
+                              } else {
+                                up[idx].less = val;
+                              }
+                              setEditItems(up);
+                            }}
+                            style={{
+                              fontSize: "14px",
+                              padding: "4px",
+                              border: "1px solid #ccc",
+                              borderLeft: "none",
+                              borderRadius: "0 4px 4px 0",
+                              backgroundColor: "#f9f9f9",
+                              cursor: "pointer",
+                              width: "90px"
+                            }}
+                            onKeyDown={(e) => handleKeyDown(e, idx, 'less')}
+                          >
+                            <option value="%">%</option>
+                            <option value="NET">NET</option>
+                            <option value="Pair">Pair</option>
+                            <option value="Full Bill">Full Bill</option>
+                            <option value="Half Bill">Half Bill</option>
+                          </select>
+                        </div>
+                      ) : (
+                        // ✅ Normal select when not %
+                        <select
+                          value={item.less}
+                          onChange={e => {
+                            const up = [...editItems];
+                            if (e.target.value === "%") {
+                              up[idx].less = "0%";
+                            } else {
+                              up[idx].less = e.target.value;
+                            }
+                            setEditItems(up);
+                          }}
+                          style={{
+                            width: "120px",
+                            fontSize: "14px",
+                            padding: "4px",
+                            borderRadius: "4px",
+                            border: "1px solid #ccc",
+                            backgroundColor: "#fff",
+                            cursor: "pointer"
+                          }}
+                          onKeyDown={e => handleKeyDown(e, idx, "less")}
+                        >
+                          <option value="%">%</option>
+                          <option value="NET">NET</option>
+                          <option value="Pair">Pair</option>
+                          <option value="Full Bill">Full Bill</option>
+                          <option value="Half Bill">Half Bill</option>
+                          {!["%", "NET", "Pair", "Full Bill", "Half Bill"].includes(item.less) && (
+                            <option value={item.less}>{item.less}</option>
+                          )}
+                        </select>
+                      )}
+                    </td>
 
                     <td>
                       <input

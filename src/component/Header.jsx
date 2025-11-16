@@ -7,7 +7,7 @@ import { FaUserCircle, FaBars, FaTimes } from 'react-icons/fa';
 import { database } from '../firebase/firebase';  // import from singleton
 import { ref, onValue } from 'firebase/database';
 
-const specialUsers = ['ammar bhai', 'huzaifa bhai', 'shop'];
+const specialUsers = ['ammar bhai', 'huzaifa bhai', 'shop','user1', 'user2', 'user3'];
 
 const Header = ({ onLogout }) => {
   const navigate = useNavigate();

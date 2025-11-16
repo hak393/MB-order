@@ -313,14 +313,18 @@ const ViewItems = () => {
   };
 
   // Filter list
-  const filteredList =
-    selectedOption === 'customer'
-      ? customers.filter((cust) =>
-        `${cust.name} ${cust.city}`.toLowerCase().includes(searchTerm.toLowerCase())
+  // ✅ Normalize text: remove all special chars, spaces, dots & lowercase
+const normalize = (str) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const filteredList =
+  selectedOption === 'customer'
+    ? customers.filter((cust) =>
+        normalize(`${cust.name} ${cust.city}`).includes(normalize(searchTerm))
       )
-      : products.filter((prod) =>
-        `${prod.name} ${prod.qty}`.toLowerCase().includes(searchTerm.toLowerCase()) // 🔹 Changed from price to qty
+    : products.filter((prod) =>
+        normalize(`${prod.name} ${prod.qty}`).includes(normalize(searchTerm))
       );
+
 
   return (
     <div className="view-items-container" style={{ padding: '20px' }}>

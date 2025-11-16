@@ -21,6 +21,7 @@ const ViewOrder = () => {
   const [transportName, setTransportName] = useState('');
   const [showAddModal, setShowAddModal] = useState(false); // ✅ New state
   const [activeOrderId, setActiveOrderId] = useState(null); // ✅ add this
+  const [statusMap, setStatusMap] = useState({});
   const [expandedOrder, setExpandedOrder] = useState(null);
 const now = new Date();
 const localISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString();
@@ -33,8 +34,25 @@ const localISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISO
   const [editedItem, setEditedItem] = useState(null);
 
   const navigate = useNavigate();
-  const isAuthorizedUser = name => ['huzaifa bhai', 'ammar bhai', 'shop'].includes(name.toLowerCase());
-  const isAuthorizedAdd = name => ['huzaifa bhai', 'ammar bhai', 'shop'].includes(name.toLowerCase());
+  const isAuthorizedUser = name =>
+  name &&
+  ['huzaifa bhai','ammar bhai','shop','user1','user2','user3']
+    .includes(name.toLowerCase());
+  const isAuthorizedAdd = name =>
+  name &&
+  ['huzaifa bhai','ammar bhai','shop','user1','user2','user3']
+    .includes(name.toLowerCase());
+
+ const [addOrder, setAddOrder] = useState(null);
+
+useEffect(() => {
+  const addOrderRef = ref(db, 'addOrder');
+  onValue(addOrderRef, (snapshot) => {
+    setAddOrder(snapshot.val());
+  });
+}, []);
+
+
 
 
 
@@ -63,7 +81,26 @@ const localISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISO
           });
         });
       }
-      flat.sort((a, b) => new Date(a.orderData.timestamp) - new Date(b.orderData.timestamp));
+      // Convert DD/MM/YYYY if needed
+const parseDate = (d) => {
+  if (!d) return new Date(0);
+  if (d.includes("/")) {
+    const [day, month, year] = d.split("/").map(Number);
+    return new Date(year, month - 1, day);
+  }
+  return new Date(d); // ISO
+};
+
+// Sort by date DESC (newest first), then orderNo DESC
+flat.sort((a, b) => {
+  const dateA = parseDate(a.orderData.date || a.orderData.timestamp);
+  const dateB = parseDate(b.orderData.date || b.orderData.timestamp);
+
+  if (dateA > dateB) return -1;
+  if (dateA < dateB) return 1;
+
+  return (b.orderData.orderNo || 0) - (a.orderData.orderNo || 0);
+});
       setOrders(flat);
     });
 
@@ -326,6 +363,7 @@ const localISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISO
   transportName: transportName || '',
   challanNo: newChallanNo,
   timestamp: localISO, // ✅ ALWAYS use current timestamp
+  
   items: sellItems.map(i => ({
     productName: i.productName,
     originalQty: i.originalQty,
@@ -393,25 +431,61 @@ const printSoldItems = (customerName, city, sold, phoneNumber, transportName, ch
   const today = new Date();
   const date = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
 
-  const tbodyHTML = (sold || [])
-    .map(
-      (i, idx) => `
-      <tr>
-        <td>${idx + 1}</td>
-        <td>${cleanProductName(i.productName)}</td>
-        <td>${i.soldQty} ${i.unit || ""}</td>
-        <td>${i.weight ? parseFloat(i.weight).toFixed(3) : '-'}</td>
-        <td>${i.price}</td>
-        <td>${typeof i.less === 'number' || (typeof i.less === 'string' && !isNaN(Number(i.less)))
-          ? i.less + '%'
-          : i.less || '-'
-        }</td>
-        <td>${i.packet || '-'}</td>
-      </tr>
-    `
-    )
-    .join('');
+  // -------------------------------
+  // ✅ 15 ITEMS PER PAGE LOGIC
+  // -------------------------------
+  // ✅ Split soldChunks into 15 rows per page
+const chunkRows = (arr, size) => {
+  const result = [];
+  for (let i = 0; i < arr.length; i += size) {
+    result.push(arr.slice(i, i + size));
+  }
+  return result;
+};
 
+const rowChunks = chunkRows(sold, 15);
+
+// ✅ Build tbodyHTML with page-wise 15 items per page
+const tbodyHTML = rowChunks
+  .map((chunk, pageIndex) => {
+    const rows = chunk
+      .map(
+        (i, idx) => `
+        <tr>
+          <td>${idx + 1 + pageIndex * 15}</td>
+          <td>${cleanProductName(i.productName)}</td>
+          <td>${i.soldQty} ${i.unit || ""}</td>
+          <td>${i.weight ? parseFloat(i.weight).toFixed(3) : '-'}</td>
+          <td>${i.price}</td>
+          <td>${
+            typeof i.less === "number" ||
+            (typeof i.less === "string" && !isNaN(Number(i.less)))
+              ? i.less + "%"
+              : i.less || "-"
+          }</td>
+          <td>${i.packet || "-"}</td>
+        </tr>`
+      )
+      .join("");
+
+    return `
+      <tbody style="${pageIndex > 0 ? "margin-top:40px;" : ""}">
+        ${rows}
+      </tbody>
+
+      ${
+        pageIndex < rowChunks.length - 1
+          ? '<tr style="page-break-after: always;"></tr>'
+          : ""
+      }
+    `;
+  })
+  .join("");
+
+
+  // -------------------------------
+  // ⭐ EXISTING HEADER CODE (unchanged)
+  // -------------------------------
   const headerHTML = `
     <div style="display:flex; justify-content:space-between; width:100%; font-size:20px;">
       <div><strong>Customer:</strong> ${customerName}</div>
@@ -432,103 +506,212 @@ const printSoldItems = (customerName, city, sold, phoneNumber, transportName, ch
     alert("Popup blocked! Please allow popups for this site.");
     return;
   }
-
-  w.document.write(`
-  <html>
+ w.document.write(`
+<html>
   <head>
     <title>Packing Slip</title>
     <style>
-  @page { size: A5 landscape; margin: 10mm; }
-  thead { display: table-header-group; }
-  body { font-family: Arial, sans-serif; padding: 20px; transform: scale(0.85); transform-origin: top left; }
-  h2 { text-align: center; margin-bottom: 5px; }
-  .copy-title { text-align:center; font-size:14px; font-weight:bold; margin-bottom:10px; }
-  .order-header { margin-bottom: 15px; font-size: 14px; line-height: 1.5; }
-  table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
-  th, td { border: 1px solid #000; padding: 6px; text-align: center; }
-  /* ✅ Original Copy page numbering */
-  .original .page-number:after { counter-increment: page; content: "Page " counter(page); }
-  /* ✅ Duplicate Copy uses same page number as original */
-  .duplicate .page-number:after { content: attr(data-page); }
-</style>
+      @page { size: A5 landscape; margin: 0; }
 
+  @page {
+  
+    size: A5 landscape ; /* or landscape */
+    margin: 0;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  tbody tr {
+    page-break-inside: avoid !important;
+  }
+    thead tr.copy-title-row {
+    display: table-row !important;
+}
+    
+}
+/* Force copy title to repeat on every page */
+thead tr.copy-title-row {
+    display: table-row !important;
+    text-align: center;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+
+
+      
+      thead { 
+        display: table-header-group;
+      }
+
+      tfoot {
+        display: table-footer-group;
+        
+      }
+
+      body,
+      .original,
+      .duplicate {
+        font-family: Arial, sans-serif;
+        margin: 5mm 8mm 0 8mm;
+        padding: 0;
+        transform: none;
+        transform-origin: top left;
+        width: 100%;
+      }
+
+      .print-wrapper {
+        width: 95%;
+        margin: 0 auto;
+      }
+
+      h2 { text-align: center; margin-bottom: 5px; }
+
+      .copy-title {
+        margin-top: 20px;
+        text-align: center;
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 10px;
+      }
+
+      .header-repeat {
+        display: table-header-group;
+      }
+
+      .order-header,
+      .original,
+      .duplicate {
+      
+        margin-bottom: 10px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      table {
+        width: 90%;
+        border-collapse: collapse;
+        margin: 0;
+        font-size: 14px;
+      }
+
+      th, td {
+        margin-bottom: 12px;
+        border: 1px solid #000;
+        padding: 2px;
+        text-align: center;
+      }
+
+      .original .page-number::after {
+        counter-increment: page;
+        content: "Page " counter(page);
+      }
+
+      .duplicate .page-number::after {
+        content: attr(data-page);
+      }
+    </style>
   </head>
   <body>
     <!-- Original Copy -->
-    <div class="copy-title">Original Copy</div>
-   <div class="original">
-  <table>
-    <thead>
-      <tr>
-        <th colspan="7">
-          <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
-            <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
-            <span class="page-number" style="position:absolute; right:0;"></span>
-          </div>
-        </th>
-      </tr>
-        <tr>
-          <th colspan="7"><div class="order-header">${headerHTML}</div></th>
-        </tr>
-        <tr>
-          <th>Sr No.</th>
-          <th>Product</th>
-          <th>Qty</th>
-          <th>Weight</th>
-          <th>Price</th>
-          <th>Less</th>
-          <th>Packet</th>
-        </tr>
-      </thead>
-      <tbody>${tbodyHTML}</tbody>
-    </table>
+        <div class="copy-title">Original Copy</div>
+    <div class="page-block">
+<div class="original">
+<table>
+<thead>
+
+            <th colspan="7">
+              <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
+                <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
+                <span class="page-number" style="position:absolute; right:0;"></span>
+              </div>
+            </th>
+          </tr>
+          <tr>
+            <th colspan="7"><div style="margin-bottom:10px;" class="order-header">${headerHTML}</div></th>
+          </tr>
+          <tr>
+            <th>Sr No.</th>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Weight</th>
+            <th>Price</th>
+            <th>Less</th>
+            <th>Packet</th>
+          </tr>
+        </thead>
+        ${tbodyHTML}
+      </table>
+      <div style="page-break-after: always;"></div>
+    </div>
     </div>
 
     <div style="page-break-before: always;"></div>
 
     <!-- Duplicate Copy -->
     <div class="copy-title">Duplicate Copy</div>
-    <div class="duplicate">
-  <table>
-    <thead>
-      <tr>
-        <th colspan="7">
-          <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
-            <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
-            <span class="page-number" style="position:absolute; right:0;" data-page="Page 1"></span>
-          </div>
-        </th>
-      </tr>
+    <div class="page-block">
+<div class="duplicate">
+<table>
+<thead>
         <tr>
-          <th colspan="7"><div class="order-header">${headerHTML}</div></th>
-        </tr>
-        <tr>
-          <th>Sr No.</th>
-          <th>Product</th>
-          <th>Qty</th>
-          <th>Weight</th>
-          <th>Price</th>
-          <th>Less</th>
-          <th>Packet</th>
-        </tr>
-      </thead>
-      <tbody>${tbodyHTML}</tbody>
-    </table>
+          <tr>
+            <th colspan="7">
+              <div style="display:flex; justify-content:center; align-items:center; position:relative; width:100%;">
+                <h2 style="margin:0; flex:1; text-align:center;">PACKING SLIP</h2>
+                <span class="page-number" style="position:absolute; right:0;" data-page="Page 1"></span>
+              </div>
+            </th>
+          </tr>
+          <tr>
+            <th colspan="7"><div class="order-header">${headerHTML}</div></th>
+          </tr>
+          <tr>
+            <th>Sr No.</th>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Weight</th>
+            <th>Price</th>
+            <th>Less</th>
+            <th>Packet</th>
+          </tr>
+        </thead>
+        ${tbodyHTML}
+      </table>
+      <div style="page-break-after: always;"></div>
+    </div>
     </div>
 
     <script>
+      // ✅ Works on both desktop and mobile browsers
       window.onload = () => {
-        window.print();
-        window.onafterprint = () => window.close();
+  setTimeout(() => {
+    try {
+      window.print();
+    } catch (e) {
+      alert("Please use your browser’s share or print option manually.");
+    }
+  }, 800); // small delay helps mobile preview load
+};
+
+
+      window.onafterprint = () => {
+        setTimeout(() => document.body.removeChild(iframe), 2000);
       };
     </script>
   </body>
-  </html>
-  `);
+</html>
+`);
 
-  w.document.close();
-};
+    w.document.close();
 
+  };
 
 
   const handlePrint = async (customerName, city, sold) => {
@@ -874,6 +1057,23 @@ const printSoldItems = (customerName, city, sold, phoneNumber, transportName, ch
                     <div><strong>Customer:</strong> ${customerName}</div>
                     <div><strong>City:</strong> ${orderData.city}</div>
                     <div><strong>Date:</strong> ${formattedDate}</div>
+${orderData.note ? `
+  <div style="
+    margin-top: 8px;
+    background-color: #fffbea;
+    border: 1px solid #ffe58f;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-style: italic;
+    color: #856404;
+    display: inline-block;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  ">
+    📝 NOTE: ${orderData.note}
+  </div>
+` : ''}
+
                 </th>
             </tr>
             <tr>
@@ -946,42 +1146,208 @@ const printSoldItems = (customerName, city, sold, phoneNumber, transportName, ch
       {orders.length === 0 ? (
         <p style={{ textAlign: 'center' }}>No orders found.</p>
       ) : (
-        orders.map(({ key, user, orderId, customerName, orderData }, index) => (
+        [...orders].reverse().map(({ key, user, orderId, customerName, orderData }, index) => (
           <div key={key} className="order-card new">
             <div className="order-header">
-              <div>
-                <strong>Order No.: {index + 1} </strong><br />
-                <strong>User:</strong> {user} <br />
-                <strong>Customer:</strong> {customerName} <br />
-                <strong>City:</strong> {orderData.city} <br />
-                <div><strong>Placed On:</strong>{
-  new Date(orderData.timestamp).toLocaleDateString('en-GB')
-}</div>
+  <div>
+    <strong>Order No.: {orders.length - index}</strong><br />
+    <strong>User:</strong> {user} <br />
+    <strong>Customer:</strong> {customerName} <br />
+    <strong>City:</strong> {orderData.city} <br />
+    <div>
+      <strong>Placed On:</strong>{" "}
+{(() => {
+  const ts = orderData.timestamp;
+  if (!ts) return "—";
 
-              </div>
-              {(isAuthorizedAdd(userName) || userName === user) && (
-                <div className="order-action">
-                  {/* ✅ Change Add button to open modal */}
-                  <button onClick={() => handleAddOrder(orderId)}>Add</button>
-                </div>
-              )}
-              {isAuthorizedUser(userName) && (
-  <div className="order-action">
-    <button onClick={() => handleSellOrder(user, customerName, orderData, orderId)}>Sell</button>
-    <button
-      style={{ marginTop: '10px' }}
-      onClick={() => previewAndPrint({ user, customerName, orderData })}
-    >
-      Print
-    </button>
+  const parsed = new Date(ts);
+
+  // ✅ Case 1: If it's a valid Date object
+  if (!isNaN(parsed)) {
+    return parsed.toLocaleDateString("en-GB");
+  }
+
+  // ✅ Case 2: If format is DD/MM/YYYY, HH:MM:SS AM/PM
+  const match = ts.match(
+    /^(\d{2})\/(\d{2})\/(\d{4}),\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i
+  );
+
+  if (match) {
+    const [_, dd, mm, yyyy, hh, min, sec = "00", period] = match;
+    let hours = parseInt(hh, 10);
+    if (period?.toUpperCase() === "PM" && hours < 12) hours += 12;
+    if (period?.toUpperCase() === "AM" && hours === 12) hours = 0;
+
+    const date = new Date(`${yyyy}-${mm}-${dd}T${String(hours).padStart(2, "0")}:${min}:${sec}`);
+    if (!isNaN(date)) {
+      return date.toLocaleDateString("en-GB");
+    }
+  }
+
+  return "—";
+})()}
+
+
+    </div>
+    {orderData.note && (
+  <div
+    style={{
+      backgroundColor: "#fffbea",
+      border: "1px solid #ffe58f",
+      borderRadius: "6px",
+      padding: "6px 10px",
+      marginTop: "6px",
+      fontStyle: "italic",
+      color: "#856404",
+      display: "inline-block",
+      textTransform: "uppercase",
+      letterSpacing: "0.5px",
+    }}
+  >
+    📝 NOTE: {orderData.note}
   </div>
 )}
 
-{/* ✅ Expand/Collapse Button (allowed for all users) */}
-<div className="order-action">
+  </div>
+  
+
+  <div
+  className="order-action"
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    flexWrap: "wrap",
+    marginTop: "10px",
+  }}
+>
+  {/* ✅ Add Button */}
+  {/* ✅ Add Button */}
+{userName && (isAuthorizedAdd(userName) || userName === user) && (
+  <>
+    {/* ✅ If ANY order is being added → show ADDING only for that card + hide ALL other ADD buttons */}
+    {Object.values(addOrder || {}).some(val => val === true) ? (
+      addOrder[orderId] ? (
+        <span style={{ color: "red", fontWeight: "bold" }}>ADDING</span>
+      ) : null
+    ) : (
+      <button onClick={() => handleAddOrder(orderId)}>Add</button>
+    )}
+  </>
+)}
+
+
+
+  {/* ✅ Sell Button */}
+  {userName && isAuthorizedUser(userName) && (
+    <button
+      onClick={async () => {
+        handleSellOrder(user, customerName, orderData, orderId);
+
+        try {
+          const orderRef = ref(db, `orders/${user}/${orderId}`);
+          await update(orderRef, {
+  status: "process",
+  note: orderData.note || "", // ✅ push note along with status
+});
+          setStatusMap((prev) => ({ ...prev, [orderId]: "process" }));
+          console.log("Order status set to process automatically");
+        } catch (err) {
+          console.error("Error auto-updating status:", err);
+        }
+      }}
+    >
+      Sell
+    </button>
+  )}
+
+  {/* ✅ Print Button */}
+  {isAuthorizedUser(userName) && (
+    <button onClick={() => previewAndPrint({ user, customerName, orderData })}>
+      Print
+    </button>
+  )}
+
+  {/* ✅ Status Dropdown */}
+  {userName && isAuthorizedUser(userName) ? (
+  // ✅ Authorized users can change status
+  <select
+    value={statusMap[orderId] || orderData.status || "select"}
+    onChange={async (e) => {
+      const newStatus = e.target.value;
+      setStatusMap((prev) => ({ ...prev, [orderId]: newStatus }));
+      try {
+        const orderRef = ref(db, `orders/${user}/${orderId}`);
+        await update(orderRef, { status: newStatus });
+        console.log("Order status updated:", newStatus);
+      } catch (err) {
+        console.error("Error updating status:", err);
+      }
+    }}
+    style={{
+      padding: "5px 10px",
+      borderRadius: "6px",
+      border: "1px solid #ccc",
+      cursor: "pointer",
+      background:
+        (statusMap[orderId] || orderData.status) === "started"
+          ? "#cce5ff"
+          : (statusMap[orderId] || orderData.status) === "process"
+          ? "#fff3cd"
+          : (statusMap[orderId] || orderData.status) === "completed"
+          ? "#d4edda"
+          : "#f9f9f9",
+      color:
+        (statusMap[orderId] || orderData.status) === "started"
+          ? "#00008B"
+          : (statusMap[orderId] || orderData.status) === "process"
+          ? "#8B0000"
+          : (statusMap[orderId] || orderData.status) === "completed"
+          ? "#155724"
+          : "#333",
+      fontWeight: "bold",
+    }}
+  >
+    <option value="select">Select</option>
+    <option value="started">Started</option>
+    <option value="process">Process</option>
+    <option value="completed">Completed</option>
+  </select>
+) : (
+  // 🚫 Non-authorized users see current status only
+  <div
+    style={{
+      padding: "5px 10px",
+      borderRadius: "6px",
+      border: "1px solid #ccc",
+      background:
+        (statusMap[orderId] || orderData.status) === "started"
+          ? "#cce5ff"
+          : (statusMap[orderId] || orderData.status) === "process"
+          ? "#fff3cd"
+          : (statusMap[orderId] || orderData.status) === "completed"
+          ? "#d4edda"
+          : "#f9f9f9",
+      color:
+        (statusMap[orderId] || orderData.status) === "started"
+          ? "#00008B"
+          : (statusMap[orderId] || orderData.status) === "process"
+          ? "#8B0000"
+          : (statusMap[orderId] || orderData.status) === "completed"
+          ? "#155724"
+          : "#333",
+      fontWeight: "bold",
+    }}
+  >
+    {statusMap[orderId] || orderData.status || "Select"}
+  </div>
+)}
+
+  {/* ✅ Expand/Collapse Button */}
   <button
-    style={{ marginTop: '10px' }}
-    onClick={() => setExpandedOrder(prev => prev === orderId ? null : orderId)}
+    onClick={() =>
+      setExpandedOrder((prev) => (prev === orderId ? null : orderId))
+    }
   >
     {expandedOrder === orderId ? "▲" : "▼"}
   </button>
