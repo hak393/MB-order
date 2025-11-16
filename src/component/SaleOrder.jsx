@@ -154,6 +154,7 @@ const SellOrder = () => {
 
       // ✅ Get the last challan number (max challanNo across all)
       // ✅ Get the last challan number (max challanNo across all)
+
       if (withChallan.length > 0) {
         const today = new Date();
 
@@ -194,10 +195,51 @@ const SellOrder = () => {
         setLastChallanNo("00");
         update(ref(db, "challanCounter"), { lastNo: 0 });
       }
+if (withChallan.length > 0) {
+  const today = new Date();
+
+  // Find the latest challan entry
+  const latestOrder = withChallan.reduce((latest, current) => {
+    return new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest;
+  });
+
+  const latestDate = new Date(latestOrder.timestamp);
+  const sameMonth =
+    latestDate.getMonth() === today.getMonth() &&
+    latestDate.getFullYear() === today.getFullYear();
+
+  let maxChallan = 0;
+
+  if (sameMonth) {
+    // ✅ Continue same month's challan numbering
+    maxChallan = Math.max(
+      ...withChallan
+        .filter(o => {
+          const d = new Date(o.timestamp);
+          return (
+            d.getMonth() === today.getMonth() &&
+            d.getFullYear() === today.getFullYear()
+          );
+        })
+        .map(o => parseInt(o.challanNo, 10) || 0)
+    );
+  } else {
+    // ✅ New month → reset to 0
+    maxChallan = 0;
+    update(ref(db, "challanCounter"), { lastNo: 0 });
+  }
+
+  // ✅ Always update UI challan display
+  setLastChallanNo(maxChallan.toString().padStart(2, "0"));
+} else {
+  setLastChallanNo("00");
+  update(ref(db, "challanCounter"), { lastNo: 0 });
+}
 
 
-      withChallan.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      setSellOrders(withChallan);
+withChallan.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+setSellOrders(withChallan);
+
     });
   }, []);
 
@@ -574,9 +616,6 @@ thead tr.copy-title-row {
     printWindow.document.close();
 
   };
-
-
-
   const handleEdit = async (order) => {
     setEditingOrder(order);
 
@@ -601,17 +640,10 @@ thead tr.copy-title-row {
           console.error("Error fetching kgRate:", err);
         }
       }
-
       return { ...item, kgRate: existingKgRate };
     }));
-
     setEditItems(updatedItems);
   };
-
-
-
-
-
   const handleKeyDown = (e, rowIndex, col) => {
     const cols = ['originalQty', 'soldQty', 'weight', 'less', 'price', 'packet']; // skip 'productName'
     const currentColIndex = cols.indexOf(col);
@@ -671,10 +703,6 @@ thead tr.copy-title-row {
 
     setFilteredPartyOrders(results);
   };
-
-
-
-
   const handleSave = async () => {
     if (!editingOrder) return;
 
