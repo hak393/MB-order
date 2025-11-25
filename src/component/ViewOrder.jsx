@@ -1146,7 +1146,36 @@ ${orderData.note ? `
       {orders.length === 0 ? (
         <p style={{ textAlign: 'center' }}>No orders found.</p>
       ) : (
-        [...orders].reverse().map(({ key, user, orderId, customerName, orderData }, index) => (
+        [...orders]
+  .sort((a, b) => {
+    const parse = (ts) => {
+      if (!ts) return 0;
+
+      const parsed = new Date(ts);
+      if (!isNaN(parsed)) return parsed.getTime();
+
+      const match = ts.match(
+        /^(\d{2})\/(\d{2})\/(\d{4}),\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i
+      );
+
+      if (match) {
+        const [_, dd, mm, yyyy, hh, min, sec = "00", period] = match;
+        let hours = parseInt(hh, 10);
+        if (period?.toUpperCase() === "PM" && hours < 12) hours += 12;
+        if (period?.toUpperCase() === "AM" && hours === 12) hours = 0;
+
+        const date = new Date(
+          `${yyyy}-${mm}-${dd}T${String(hours).padStart(2, "0")}:${min}:${sec}`
+        );
+        if (!isNaN(date)) return date.getTime();
+      }
+
+      return 0;
+    };
+
+    return parse(b.orderData.timestamp) - parse(a.orderData.timestamp); // newest → oldest
+  })
+  .map(({ key, user, orderId, customerName, orderData }, index) => (
           <div key={key} className="order-card new">
             <div className="order-header">
   <div>
@@ -1162,12 +1191,12 @@ ${orderData.note ? `
 
   const parsed = new Date(ts);
 
-  // ✅ Case 1: If it's a valid Date object
+  // Case 1: Valid Date object
   if (!isNaN(parsed)) {
-    return parsed.toLocaleDateString("en-GB");
+    return `${parsed.toLocaleDateString("en-GB")} ${parsed.toLocaleTimeString("en-GB")}`;
   }
 
-  // ✅ Case 2: If format is DD/MM/YYYY, HH:MM:SS AM/PM
+  // Case 2: DD/MM/YYYY, HH:MM:SS AM/PM format
   const match = ts.match(
     /^(\d{2})\/(\d{2})\/(\d{4}),\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i
   );
@@ -1178,14 +1207,18 @@ ${orderData.note ? `
     if (period?.toUpperCase() === "PM" && hours < 12) hours += 12;
     if (period?.toUpperCase() === "AM" && hours === 12) hours = 0;
 
-    const date = new Date(`${yyyy}-${mm}-${dd}T${String(hours).padStart(2, "0")}:${min}:${sec}`);
+    const date = new Date(
+      `${yyyy}-${mm}-${dd}T${String(hours).padStart(2, "0")}:${min}:${sec}`
+    );
+
     if (!isNaN(date)) {
-      return date.toLocaleDateString("en-GB");
+      return `${date.toLocaleDateString("en-GB")} ${date.toLocaleTimeString("en-GB")}`;
     }
   }
 
   return "—";
 })()}
+
 
 
     </div>
