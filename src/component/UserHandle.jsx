@@ -12,7 +12,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 
 const firebaseConfig = {
-  databaseURL: 'https://mb-order-3764e-default-rtdb.firebaseio.com/',
+  databaseURL: 'https://mb-order-60752-default-rtdb.firebaseio.com/',
 };
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();

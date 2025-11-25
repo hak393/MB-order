@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './Style.css';
 
-const URL = 'https://mb-order-3764e-default-rtdb.firebaseio.com/';
+const URL = 'https://mb-order-60752-default-rtdb.firebaseio.com/';
 
 const OrderPage = () => {
   const [transportName, setTransportName] = useState('');
@@ -33,6 +33,10 @@ const OrderPage = () => {
   const [loading, setLoading] = useState(false);
   const [kgRate, setKgRate] = useState('');
   const [note, setNote] = useState("");
+  const [allCustomers, setAllCustomers] = useState([]);
+const [allProducts, setAllProducts] = useState([]);
+const [allSellOrders, setAllSellOrders] = useState([]);
+
 
 
 
@@ -54,6 +58,29 @@ const OrderPage = () => {
   }, [highlightedCustIndex]);
 
   useEffect(() => {
+  const loadData = async () => {
+    try {
+      // Load customers once
+      const c = await fetch(`${URL}/customers.json`).then(r => r.json());
+      setAllCustomers(Object.values(c || {}));
+
+      // Load products once
+      const p = await fetch(`${URL}/products.json`).then(r => r.json());
+      setAllProducts(Object.values(p || {}));
+
+      // Load sell orders once
+      const s = await fetch(`${URL}/sellOrders.json`).then(r => r.json());
+      setAllSellOrders(Object.values(s || {}));
+    } catch (err) {
+      console.error("Error loading initial data:", err);
+    }
+  };
+
+  loadData();
+}, []);
+
+
+  useEffect(() => {
     if (productListRef.current && highlightedProdIndex >= 0)
       productListRef.current.querySelectorAll('li')[highlightedProdIndex]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [highlightedProdIndex]);
@@ -65,31 +92,30 @@ const OrderPage = () => {
 
   useEffect(() => {
   if (refDebCust.current) clearTimeout(refDebCust.current);
-  if (justSelectedCustomer || !custName.trim()) return setSuggestions([]);
+
+  if (justSelectedCustomer || !custName.trim()) {
+    setSuggestions([]);
+    return;
+  }
+
   setValidCustomer(false);
 
-  // ✅ Normalization function (remove special chars & spaces)
   const normalize = (str) =>
     str.toLowerCase().replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, '');
 
   refDebCust.current = setTimeout(() => {
-    fetch(`${URL}/customers.json`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (!d) return setSuggestions([]);
+    const search = normalize(custName);
 
-        const search = normalize(custName);
-        const results = Object.values(d)
-          .filter((c) => normalize(c.name || '').includes(search))
-          .map((c) => ({ name: c.name, city: c.city }))
-          .slice(0, 10);
+    const results = allCustomers
+      .filter(c => normalize(c.name || "").includes(search))
+      .map(c => ({ name: c.name, city: c.city }))
+      .slice(0, 10);
 
-        setSuggestions(results);
-        setHighlightedCustIndex(-1);
-      })
-      .catch(() => setSuggestions([]));
-  }, 10); // ✅ reduced delay for faster typing response
-}, [custName, justSelectedCustomer]);
+    setSuggestions(results);
+    setHighlightedCustIndex(-1);
+  }, 10);
+}, [custName, justSelectedCustomer, allCustomers]);
+
 
 
   useEffect(() => {
@@ -106,26 +132,26 @@ const OrderPage = () => {
   setValidProduct(false);
 
   // ✅ normalization function (removes special chars & spaces)
-  const normalize = str =>
-    str.toLowerCase().replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, '');
 
-  refDebProd.current = setTimeout(async () => {
+  refDebProd.current = setTimeout(() => {
+  const fetchData = async () => {
     try {
-      // ✅ fetch once
-      const [prodRes, sellRes] = await Promise.all([
-        fetch(`${URL}/products.json`),
-        fetch(`${URL}/sellOrders.json`)
-      ]);
+      const prodRes = await fetch(`${URL}products.json`);
+      const sellRes = await fetch(`${URL}sellOrders.json`);
 
       const d = await prodRes.json();
       const sellData = await sellRes.json();
 
       if (!d) return setProdSuggestions([]);
 
-      const searchTerm = normalize(productName);
-      const allProducts = Object.values(d);
+      const allProducts = Object.values(d || {});
+      const allSellOrders = Object.values(sellData || {});
 
-      // ✅ Pre-normalize product names (much faster filtering)
+      const normalize = str =>
+        str.toLowerCase().replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, '');
+
+      const searchTerm = normalize(productName);
+
       const suggestions = allProducts
         .filter(p => normalize(p.name || '').includes(searchTerm))
         .map(p => {
@@ -133,28 +159,23 @@ const OrderPage = () => {
           return {
             name: p.name,
             qty: match ? parseInt(match[1]) : 1,
-            unit: match ? match[2] : 'pcs',
+            unit: match ? match[2] : "pcs",
             price: null,
-            less: null
+            less: null,
           };
         });
 
-      // ✅ Customer-specific price/less mapping
-      if (custName?.trim() && sellData) {
-        const custOrders = Object.values(sellData).filter(
-          o => o.customerName?.toLowerCase().trim() === custName.toLowerCase().trim()
+      if (custName.trim()) {
+        const custOrders = allSellOrders.filter(
+          o => o.customerName?.toLowerCase() === custName.toLowerCase()
         );
 
         custOrders.forEach(order => {
           if (Array.isArray(order.items)) {
             order.items.forEach(item => {
-              const match = suggestions.find(
-                s =>
-                  normalize(s.name) === normalize(item.productName || '') ||
-                  normalize(s.name).includes(normalize(item.productName || '')) ||
-                  normalize(item.productName || '').includes(normalize(s.name))
+              const match = suggestions.find(s =>
+                normalize(s.name).includes(normalize(item.productName))
               );
-
               if (match) {
                 match.price = item.price || null;
                 match.less = item.less || null;
@@ -166,11 +187,15 @@ const OrderPage = () => {
 
       setProdSuggestions(suggestions.slice(0, 10));
       setHighlightedProdIndex(-1);
-    } catch (e) {
-      console.error(e);
-      setProdSuggestions([]);
+
+    } catch (err) {
+      console.error("Error loading products", err);
     }
-  }, 10); // ✅ reduced delay for faster response
+  };
+
+  fetchData(); // <-- call async function
+}, 10);
+ // ✅ reduced delay for faster response
 }, [productName, custName, justSelectedProduct]);
 
 

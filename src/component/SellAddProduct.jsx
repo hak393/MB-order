@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getDatabase, ref, update } from "firebase/database";
 import './Style.css';
-const URL = 'https://mb-order-3764e-default-rtdb.firebaseio.com/';
+const URL = 'https://mb-order-60752-default-rtdb.firebaseio.com/';
 const SellAddProduct = () => {
     const db = getDatabase();
     

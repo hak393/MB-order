@@ -7,7 +7,7 @@ import { update, get } from "firebase/database";
 import EditAddProduct from './EditAddProduct';
 
 const firebaseConfig = {
-  databaseURL: "https://mb-order-3764e-default-rtdb.firebaseio.com"
+  databaseURL: "https://mb-order-60752-default-rtdb.firebaseio.com/"
 };
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);

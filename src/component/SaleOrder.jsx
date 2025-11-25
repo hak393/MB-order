@@ -7,7 +7,7 @@ import SellAddProduct from './SellAddProduct';
 
 
 
-const firebaseConfig = { databaseURL: 'https://mb-order-3764e-default-rtdb.firebaseio.com/' };
+const firebaseConfig = { databaseURL: 'https://mb-order-60752-default-rtdb.firebaseio.com/' };
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getDatabase(app);
 

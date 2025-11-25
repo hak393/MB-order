@@ -3,7 +3,7 @@ import { getDatabase, ref, update, remove } from "firebase/database";
 
 import './Style.css';
 
-const URL = 'https://mb-order-3764e-default-rtdb.firebaseio.com/';
+const URL = 'https://mb-order-60752-default-rtdb.firebaseio.com/';
 
 const EditAddProduct = () => {
   const db = getDatabase();
