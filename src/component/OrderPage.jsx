@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './Style.css';
 
+  const getFormattedTimestamp = () => {
+  const d = new Date();
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  const time = d.toLocaleTimeString("en-GB");
+  return `${day}/${month}/${year} ${time}`;
+};
+
 const URL = 'https://mb-order-60752-default-rtdb.firebaseio.com/';
 
 const OrderPage = () => {
@@ -36,12 +45,6 @@ const OrderPage = () => {
   const [allCustomers, setAllCustomers] = useState([]);
 const [allProducts, setAllProducts] = useState([]);
 const [allSellOrders, setAllSellOrders] = useState([]);
-
-
-
-
-  
-
 
 
   const refDebCust = useRef(null),
@@ -99,6 +102,7 @@ const [allSellOrders, setAllSellOrders] = useState([]);
   }
 
   setValidCustomer(false);
+
 
   const normalize = (str) =>
     str.toLowerCase().replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, '');
@@ -390,7 +394,7 @@ setLessUnit(
     setCustomers(p => {
       const e = p[custName] || {
         city,
-        timestamp: new Date().toLocaleString(),
+        timestamp: getFormattedTimestamp(),
         items: []
       };
       return {
@@ -465,7 +469,7 @@ const handleKeyDown = (e) => {
           customerName: c.trim(),
           city: city.trim(),
           transportName: transportName.trim(),  // added here
-          timestamp: new Date().toLocaleString(),
+          timestamp: getFormattedTimestamp(),
           items: [],
           pendingOrderRows: []
         })
@@ -473,6 +477,7 @@ const handleKeyDown = (e) => {
 
       const newCustData = await newCustRes.json();
       const customerId = newCustData.name; // Firebase auto-generated ID
+      
 
       // 2️⃣ Normalize pending orders
       const normalizedPending = pendingOrders.map(({ key, isPending, ...rest }) => ({
@@ -521,7 +526,7 @@ const items = newItems.map(
         city: city.trim(),
         transportName: transportName.trim(),  // added here
         note: note.trim(),
-        timestamp: new Date().toLocaleString(),
+        timestamp: getFormattedTimestamp(),
         items,
         pendingOrderRows
       };

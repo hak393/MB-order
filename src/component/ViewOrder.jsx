@@ -1148,33 +1148,32 @@ ${orderData.note ? `
       ) : (
         [...orders]
   .sort((a, b) => {
-    const parse = (ts) => {
-      if (!ts) return 0;
+  const parse = (ts) => {
+    if (!ts) return 0;
 
-      const parsed = new Date(ts);
-      if (!isNaN(parsed)) return parsed.getTime();
+    // Matches both: "02/12/2025 02:42:28" AND "02/12/2025, 02:42:28"
+    const match = ts.match(
+      /^(\d{2})\/(\d{2})\/(\d{4})[,\s]*\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i
+    );
 
-      const match = ts.match(
-        /^(\d{2})\/(\d{2})\/(\d{4}),\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i
-      );
+    if (match) {
+      const [_, dd, mm, yyyy, hh, min, sec = "00", period] = match;
+      let hours = parseInt(hh, 10);
 
-      if (match) {
-        const [_, dd, mm, yyyy, hh, min, sec = "00", period] = match;
-        let hours = parseInt(hh, 10);
-        if (period?.toUpperCase() === "PM" && hours < 12) hours += 12;
-        if (period?.toUpperCase() === "AM" && hours === 12) hours = 0;
+      if (period?.toUpperCase() === "PM" && hours < 12) hours += 12;
+      if (period?.toUpperCase() === "AM" && hours === 12) hours = 0;
 
-        const date = new Date(
-          `${yyyy}-${mm}-${dd}T${String(hours).padStart(2, "0")}:${min}:${sec}`
-        );
-        if (!isNaN(date)) return date.getTime();
-      }
+      return new Date(
+        `${yyyy}-${mm}-${dd}T${String(hours).padStart(2, "0")}:${min}:${sec}`
+      ).getTime();
+    }
 
-      return 0;
-    };
+    return 0;
+  };
 
-    return parse(b.orderData.timestamp) - parse(a.orderData.timestamp); // newest → oldest
-  })
+  return parse(b.orderData.timestamp) - parse(a.orderData.timestamp);
+})
+
   .map(({ key, user, orderId, customerName, orderData }, index) => (
           <div key={key} className="order-card new">
             <div className="order-header">
@@ -1189,16 +1188,11 @@ ${orderData.note ? `
   const ts = orderData.timestamp;
   if (!ts) return "—";
 
-  const parsed = new Date(ts);
+  
 
-  // Case 1: Valid Date object
-  if (!isNaN(parsed)) {
-    return `${parsed.toLocaleDateString("en-GB")} ${parsed.toLocaleTimeString("en-GB")}`;
-  }
-
-  // Case 2: DD/MM/YYYY, HH:MM:SS AM/PM format
+  // Updated regex – works for your timestamp
   const match = ts.match(
-    /^(\d{2})\/(\d{2})\/(\d{4}),\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i
+    /^(\d{2})\/(\d{2})\/(\d{4})[,\s]*\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i
   );
 
   if (match) {
