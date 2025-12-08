@@ -107,6 +107,22 @@ flat.sort((a, b) => {
     return () => unsub();
   }, [navigate]);
 
+  useEffect(() => {
+  const handleUnload = () => {
+    // Remove ALL addOrder flags when closing or refreshing
+    Object.keys(addOrder || {}).forEach(orderId => {
+      if (addOrder[orderId]) {
+        const refPath = ref(db, `addOrder/${orderId}`);
+        remove(refPath).catch(() => {});
+      }
+    });
+  };
+
+  window.addEventListener("beforeunload", handleUnload);
+  return () => window.removeEventListener("beforeunload", handleUnload);
+}, [addOrder]);
+
+
   // 🔹 2. Effect for transportName when modal opens
   useEffect(() => {
   if (!showModal || !editOrderData?.orderId || !editOrderData?.user) return;
@@ -1299,75 +1315,85 @@ ${orderData.note ? `
   {userName && isAuthorizedUser(userName) ? (
   // ✅ Authorized users can change status
   <select
-    value={statusMap[orderId] || orderData.status || "select"}
-    onChange={async (e) => {
-      const newStatus = e.target.value;
-      setStatusMap((prev) => ({ ...prev, [orderId]: newStatus }));
-      try {
-        const orderRef = ref(db, `orders/${user}/${orderId}`);
-        await update(orderRef, { status: newStatus });
-        console.log("Order status updated:", newStatus);
-      } catch (err) {
-        console.error("Error updating status:", err);
-      }
-    }}
-    style={{
-      padding: "5px 10px",
-      borderRadius: "6px",
-      border: "1px solid #ccc",
-      cursor: "pointer",
-      background:
-        (statusMap[orderId] || orderData.status) === "started"
-          ? "#cce5ff"
-          : (statusMap[orderId] || orderData.status) === "process"
-          ? "#fff3cd"
-          : (statusMap[orderId] || orderData.status) === "completed"
-          ? "#d4edda"
-          : "#f9f9f9",
-      color:
-        (statusMap[orderId] || orderData.status) === "started"
-          ? "#00008B"
-          : (statusMap[orderId] || orderData.status) === "process"
-          ? "#8B0000"
-          : (statusMap[orderId] || orderData.status) === "completed"
-          ? "#155724"
-          : "#333",
-      fontWeight: "bold",
-    }}
-  >
-    <option value="select">Select</option>
-    <option value="started">Started</option>
-    <option value="process">Process</option>
-    <option value="completed">Completed</option>
-  </select>
+  value={statusMap[orderId] || orderData.status || "select"}
+  onChange={async (e) => {
+    const newStatus = e.target.value;
+    setStatusMap((prev) => ({ ...prev, [orderId]: newStatus }));
+    try {
+      const orderRef = ref(db, `orders/${user}/${orderId}`);
+      await update(orderRef, { status: newStatus });
+      console.log("Order status updated:", newStatus);
+    } catch (err) {
+      console.error("Error updating status:", err);
+    }
+  }}
+  style={{
+    padding: "5px 10px",
+    borderRadius: "6px",
+    border: "1px solid #ccc",
+    cursor: "pointer",
+    background:
+      (statusMap[orderId] || orderData.status) === "started"
+        ? "#cce5ff"
+        : (statusMap[orderId] || orderData.status) === "process"
+        ? "#fff3cd"
+        : (statusMap[orderId] || orderData.status) === "completed"
+        ? "#d4edda"
+        : (statusMap[orderId] || orderData.status) === "print"
+        ? "#e2e3f3"
+        : "#f9f9f9",
+    color:
+      (statusMap[orderId] || orderData.status) === "started"
+        ? "#00008B"
+        : (statusMap[orderId] || orderData.status) === "process"
+        ? "#8B0000"
+        : (statusMap[orderId] || orderData.status) === "completed"
+        ? "#155724"
+        : (statusMap[orderId] || orderData.status) === "print"
+        ? "#4b0082"
+        : "#333",
+    fontWeight: "bold",
+  }}
+>
+  <option value="select">Select</option>
+  <option value="started">Started</option>
+  <option value="process">Process</option>
+  <option value="completed">Completed</option>
+  <option value="print">Print</option> {/* ✅ NEW OPTION */}
+</select>
+
 ) : (
   // 🚫 Non-authorized users see current status only
   <div
-    style={{
-      padding: "5px 10px",
-      borderRadius: "6px",
-      border: "1px solid #ccc",
-      background:
-        (statusMap[orderId] || orderData.status) === "started"
-          ? "#cce5ff"
-          : (statusMap[orderId] || orderData.status) === "process"
-          ? "#fff3cd"
-          : (statusMap[orderId] || orderData.status) === "completed"
-          ? "#d4edda"
-          : "#f9f9f9",
-      color:
-        (statusMap[orderId] || orderData.status) === "started"
-          ? "#00008B"
-          : (statusMap[orderId] || orderData.status) === "process"
-          ? "#8B0000"
-          : (statusMap[orderId] || orderData.status) === "completed"
-          ? "#155724"
-          : "#333",
-      fontWeight: "bold",
-    }}
-  >
-    {statusMap[orderId] || orderData.status || "Select"}
-  </div>
+  style={{
+    padding: "5px 10px",
+    borderRadius: "6px",
+    border: "1px solid #ccc",
+    background:
+      (statusMap[orderId] || orderData.status) === "started"
+        ? "#cce5ff"
+        : (statusMap[orderId] || orderData.status) === "process"
+        ? "#fff3cd"
+        : (statusMap[orderId] || orderData.status) === "completed"
+        ? "#d4edda"
+        : (statusMap[orderId] || orderData.status) === "print"
+        ? "#e2e3f3"
+        : "#f9f9f9",
+    color:
+      (statusMap[orderId] || orderData.status) === "started"
+        ? "#00008B"
+        : (statusMap[orderId] || orderData.status) === "process"
+        ? "#8B0000"
+        : (statusMap[orderId] || orderData.status) === "completed"
+        ? "#155724"
+        : (statusMap[orderId] || orderData.status) === "print"
+        ? "#4b0082"
+        : "#333",
+    fontWeight: "bold",
+  }}
+>
+  {statusMap[orderId] || orderData.status || "Select"}
+</div>
 )}
 
   {/* ✅ Expand/Collapse Button */}

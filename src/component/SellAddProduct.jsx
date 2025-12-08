@@ -148,28 +148,30 @@ const SellAddProduct = () => {
 
       // ✅ Customer-specific price/less mapping
       if (custName?.trim() && sellData) {
-        const custOrders = Object.values(sellData).filter(
-          o => o.customerName?.toLowerCase().trim() === custName.toLowerCase().trim()
+  const custOrders = Object.values(sellData).filter(o =>
+    o.customerName?.toLowerCase().trim() === custName.toLowerCase().trim() &&
+    o.city?.toLowerCase().trim() === city.toLowerCase().trim()
+  );
+
+  custOrders.forEach(order => {
+    if (Array.isArray(order.items)) {
+      order.items.forEach(item => {
+        const match = suggestions.find(
+          s =>
+            normalize(s.name) === normalize(item.productName || '') ||
+            normalize(s.name).includes(normalize(item.productName || '')) ||
+            normalize(item.productName || '').includes(normalize(s.name))
         );
 
-        custOrders.forEach(order => {
-          if (Array.isArray(order.items)) {
-            order.items.forEach(item => {
-              const match = suggestions.find(
-                s =>
-                  normalize(s.name) === normalize(item.productName || '') ||
-                  normalize(s.name).includes(normalize(item.productName || '')) ||
-                  normalize(item.productName || '').includes(normalize(s.name))
-              );
+        if (match) {
+          match.price = item.price || null;
+          match.less = item.less || null;
+        }
+      });
+    }
+  });
+}
 
-              if (match) {
-                match.price = item.price || null;
-                match.less = item.less || null;
-              }
-            });
-          }
-        });
-      }
 
       setProdSuggestions(suggestions.slice(0, 10));
       setHighlightedProdIndex(-1);

@@ -4,6 +4,8 @@ import './Style.css';
 import { FaSun, FaMoon } from 'react-icons/fa';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { set } from "firebase/database";
+
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getDatabase, ref, get } from 'firebase/database';
@@ -107,6 +109,43 @@ const Signin = ({ onLogin }) => {
     // Step 3: Final decision
     if (isValid) {
       console.log("🎉 Login successful");
+      // Step 3: Final decision
+if (isValid) {
+
+  // 🛑 Step 2.5: Check if already logged in on another device
+  try {
+    const statusRef = ref(db, `users_status/${trimmedUserName}`);
+    const statusSnap = await get(statusRef);
+
+    if (statusSnap.exists() && statusSnap.val().isLoggedIn === true) {
+      console.log("❌ User already logged in on another device");
+      toast.error("This user is already logged in on another phone!");
+      setLoading(false);
+      return; // stop login
+    }
+
+    // If not logged in, mark user as logged in
+    await set(statusRef, {
+      isLoggedIn: true,
+      lastLogin: Date.now()
+    });
+
+    console.log("🔓 User login status updated to: LOGGED IN");
+  } catch (error) {
+    console.error("🔥 Error checking login status:", error);
+  }
+
+  // ⬇️ THIS LINE MUST REMAIN AFTER THE NEW CODE
+  console.log("🎉 Login successful");
+
+  sessionStorage.setItem('currentUser', trimmedUserName);
+  toast.success('Successfully signed in!');
+  setTimeout(() => {
+    console.log("➡ Navigating to next page for user:", trimmedUserName);
+    onLogin(trimmedUserName);
+  }, 900);
+}
+
       sessionStorage.setItem('currentUser', trimmedUserName);
       toast.success('Successfully signed in!');
       setTimeout(() => {

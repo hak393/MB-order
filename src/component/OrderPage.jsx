@@ -121,13 +121,14 @@ const [allSellOrders, setAllSellOrders] = useState([]);
 }, [custName, justSelectedCustomer, allCustomers]);
 
 
-
-  useEffect(() => {
+useEffect(() => {
   if (refDebProd.current) clearTimeout(refDebProd.current);
+
   if (justSelectedProduct) {
-    setProdSuggestions([]); // ✅ don’t refetch after selecting
+    setProdSuggestions([]);
     return;
   }
+
   if (!productName.trim()) {
     setProdSuggestions([]);
     return;
@@ -135,72 +136,55 @@ const [allSellOrders, setAllSellOrders] = useState([]);
 
   setValidProduct(false);
 
-  // ✅ normalization function (removes special chars & spaces)
+  const normalize = str =>
+    str.toLowerCase().replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, '');
 
   refDebProd.current = setTimeout(() => {
-  const fetchData = async () => {
-    try {
-      const prodRes = await fetch(`${URL}products.json`);
-      const sellRes = await fetch(`${URL}sellOrders.json`);
+    const searchTerm = normalize(productName);
 
-      const d = await prodRes.json();
-      const sellData = await sellRes.json();
+    // ✅ SUPER FAST — NO FETCH
+    const suggestions = allProducts
+      .filter(p => normalize(p.name || "").includes(searchTerm))
+      .map(p => {
+        const m = p.name.match(/\((\d+)\s*([a-zA-Z]+)\)/);
+        return {
+          name: p.name,
+          qty: m ? parseInt(m[1]) : 1,
+          unit: m ? m[2] : "pcs",
+          price: null,
+          less: null
+        };
+      });
 
-      if (!d) return setProdSuggestions([]);
+    // ✅ ADD price & less only when customer + city match
+    if (custName.trim() && city.trim()) {
+      const custOrders = allSellOrders.filter(
+        o =>
+          o.customerName?.toLowerCase() === custName.toLowerCase() &&
+          o.city?.toLowerCase() === city.toLowerCase()
+      );
 
-      const allProducts = Object.values(d || {});
-      const allSellOrders = Object.values(sellData || {});
-
-      const normalize = str =>
-        str.toLowerCase().replace(/[^a-z0-9\s]/gi, '').replace(/\s+/g, '');
-
-      const searchTerm = normalize(productName);
-
-      const suggestions = allProducts
-        .filter(p => normalize(p.name || '').includes(searchTerm))
-        .map(p => {
-          const match = p.name.match(/\((\d+)\s*([a-zA-Z]+)\)/);
-          return {
-            name: p.name,
-            qty: match ? parseInt(match[1]) : 1,
-            unit: match ? match[2] : "pcs",
-            price: null,
-            less: null,
-          };
-        });
-
-      if (custName.trim()) {
-        const custOrders = allSellOrders.filter(
-          o => o.customerName?.toLowerCase() === custName.toLowerCase()
-        );
-
-        custOrders.forEach(order => {
-          if (Array.isArray(order.items)) {
-            order.items.forEach(item => {
-              const match = suggestions.find(s =>
-                normalize(s.name).includes(normalize(item.productName))
-              );
-              if (match) {
-                match.price = item.price || null;
-                match.less = item.less || null;
-              }
-            });
-          }
-        });
-      }
-
-      setProdSuggestions(suggestions.slice(0, 10));
-      setHighlightedProdIndex(-1);
-
-    } catch (err) {
-      console.error("Error loading products", err);
+      custOrders.forEach(order => {
+        if (Array.isArray(order.items)) {
+          order.items.forEach(item => {
+            const match = suggestions.find(s =>
+              normalize(s.name).includes(normalize(item.productName || ""))
+            );
+            if (match) {
+              match.price = item.price || null;
+              match.less = item.less || null;
+            }
+          });
+        }
+      });
     }
-  };
 
-  fetchData(); // <-- call async function
-}, 10);
- // ✅ reduced delay for faster response
-}, [productName, custName, justSelectedProduct]);
+    setProdSuggestions(suggestions.slice(0, 10));
+    setHighlightedProdIndex(-1);
+  }, 50);
+
+}, [productName, custName, city, justSelectedProduct, allProducts, allSellOrders]);
+
 
 
   useEffect(() => {
