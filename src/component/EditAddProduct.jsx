@@ -1016,8 +1016,7 @@ const updateOldItem = async () => {
                       <td>{item.less || '-'}</td>
                       <td>{item.packet ?? '-'}</td>
                       <td>
-                        <button onClick={() => handleEdit("pendingFetched", i)}>Edit</button>
-                        <button onClick={() => deletePendingItem(i)}>Delete</button>
+                        -
                       </td>
                     </tr>
                   ))}

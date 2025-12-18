@@ -794,7 +794,7 @@ const SellAddProduct = () => {
                                             <td>{item.less || '-'}</td>
                                             <td>{item.packet || '-'}</td>
                                             <td>
-                                                <button onClick={() => handleEdit('old', i)}>Edit</button>
+                                                -
                                             </td>
                                         </tr>
                                     ))}

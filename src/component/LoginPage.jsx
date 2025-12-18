@@ -8,7 +8,7 @@ import { set } from "firebase/database";
 
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getDatabase, ref, get } from 'firebase/database';
+import { getDatabase, ref, get, onValue } from 'firebase/database';
 
 const firebaseConfig = {
   databaseURL: 'https://mb-order-60752-default-rtdb.firebaseio.com/',
@@ -19,6 +19,14 @@ const db = getDatabase(app);
 
 const Signin = ({ onLogin }) => {
   console.log("📄 Signin.jsx: Component rendering started");
+  const [statusPasswordInput, setStatusPasswordInput] = useState("");
+  const [userStatus, setUserStatus] = useState(null); // 'ON' | 'OFF' | null
+  const USER_STATUS_PASSWORD = "status@123"; // 🔐 change this to anything
+  const [statusPassword, setStatusPassword] = useState("");
+  const [isCredValid, setIsCredValid] = useState(false);
+
+
+
 
   const [userName, setUserName] = useState('');
   const [password, setPassword] = useState('');
@@ -35,6 +43,74 @@ const Signin = ({ onLogin }) => {
       console.log("🚪 Signin.jsx unmounted (navigated away)");
     };
   }, []);
+
+  useEffect(() => {
+  if (!isCredValid || !userName.trim()) return;
+
+  const statusRef = ref(db, `users_status/${userName.trim().toLowerCase()}`);
+
+  const unsub = onValue(statusRef, (snap) => {
+    if (snap.exists() && snap.val().isLoggedIn === true) {
+      setUserStatus("OFF");
+    } else {
+      setUserStatus("ON");
+    }
+  });
+
+  return () => unsub();
+}, [isCredValid, userName]);
+
+
+
+
+  useEffect(() => {
+  if (!userName.trim() || !password.trim()) {
+    setUserStatus(null);
+    return;
+  }
+
+  const checkStatusWithPassword = async () => {
+    try {
+      // 🔐 1. Check status-password
+      const passSnap = await get(ref(db, "user_status_password/password"));
+
+      if (!passSnap.exists()) {
+        setUserStatus(null);
+        return;
+      }
+
+      const statusPassword = passSnap.val();
+
+      // ❌ Password does NOT match → do nothing
+      if (password !== statusPassword) {
+        setUserStatus(null);
+        return;
+      }
+
+      // ✅ Password matched → now check login status
+      const statusRef = ref(
+        db,
+        `users_status/${userName.trim().toLowerCase()}`
+      );
+
+      const unsubscribe = onValue(statusRef, (snap) => {
+        if (snap.exists() && snap.val().isLoggedIn === true) {
+          setUserStatus("OFF");
+        } else {
+          setUserStatus("ON");
+        }
+      });
+
+      return () => unsubscribe();
+    } catch (err) {
+      console.error("Status password check failed", err);
+      setUserStatus(null);
+    }
+  };
+
+  checkStatusWithPassword();
+}, [userName, password]);
+
 
   useEffect(() => {
     console.log("🌙 Dark mode changed to:", darkMode);
@@ -125,12 +201,16 @@ if (isValid) {
     }
 
     // If not logged in, mark user as logged in
-    await set(statusRef, {
-      isLoggedIn: true,
-      lastLogin: Date.now()
-    });
+    // If not logged in, mark user as logged in
+await set(statusRef, {
+  isLoggedIn: true,
+  lastLogin: Date.now()
+});
 
-    console.log("🔓 User login status updated to: LOGGED IN");
+setUserStatus("ON");   // ✅ SHOW USER STATUS AFTER SUCCESS LOGIN
+
+console.log("🔓 User login status updated to: LOGGED IN");
+
   } catch (error) {
     console.error("🔥 Error checking login status:", error);
   }
@@ -161,10 +241,104 @@ if (isValid) {
     console.log("✅ Finished login process");
   };
 
+  const forceTurnOnUser = async () => {
+  try {
+    const passSnap = await get(ref(db, "user_status_password/password"));
+
+    if (!passSnap.exists()) {
+      toast.error("Status password not set");
+      return;
+    }
+
+    const firebaseStatusPassword = passSnap.val();
+
+    // ✅ compare with STATUS password input
+    if (statusPasswordInput !== firebaseStatusPassword) {
+      toast.error("Invalid status password");
+      return;
+    }
+
+    const statusRef = ref(db, `users_status/${userName.trim().toLowerCase()}`);
+
+    await set(statusRef, {
+      isLoggedIn: false,
+      lastForcedOn: Date.now()
+    });
+
+    setUserStatus("ON");
+    setStatusPasswordInput("");
+    toast.success("User status turned ON");
+
+  } catch (err) {
+    console.error(err);
+    toast.error("Failed to update status");
+  }
+};
+
+
+
+
+
   const toggleTheme = () => {
     console.log("🌗 Theme toggle clicked. Current mode:", darkMode);
     setDarkMode(prev => !prev);
   };
+  useEffect(() => {
+  const checkUserStatus = async () => {
+    if (!userName.trim() || !password.trim()) {
+      setUserStatus(null);
+      return;
+    }
+
+    const u = userName.trim().toLowerCase();
+    const p = password.trim();
+    let valid = false;
+
+    // 🔹 1. Firebase users
+    try {
+      const snap = await get(ref(db, "users"));
+      if (snap.exists()) {
+        const users = Object.values(snap.val());
+        valid = users.includes(`${u}:${p}`);
+      }
+    } catch {}
+
+    // 🔹 2. file.txt users
+    if (!valid) {
+      try {
+        const res = await fetch("/file.txt");
+        const txt = await res.text();
+        valid = txt.split("\n").some(line => {
+          const [fu, fp] = line.trim().split(",");
+          return fu?.toLowerCase() === u && fp === p;
+        });
+      } catch {}
+    }
+
+   if (!valid) {
+  setIsCredValid(false);
+  setUserStatus(null);
+  return;
+}
+
+setIsCredValid(true);
+
+
+    // 🔹 3. Check login status
+    const statusSnap = await get(ref(db, `users_status/${u}`));
+
+    if (statusSnap.exists() && statusSnap.val().isLoggedIn === true) {
+      setUserStatus("OFF"); // already logged in
+    } else {
+      setUserStatus("ON"); // available
+    }
+  };
+
+  const t = setTimeout(checkUserStatus, 400);
+  return () => clearTimeout(t);
+}, [userName, password]);
+
+
 
   return (
     <div className={`signin-container ${darkMode ? 'dark' : 'light'}`}>
@@ -197,6 +371,47 @@ if (isValid) {
           <button type="submit" disabled={loading}>
             {loading ? 'Checking...' : 'Submit'}
           </button>
+
+          {userStatus && (
+  <div style={{ marginTop: "8px" }}>
+    <span
+      style={{
+        fontWeight: "bold",
+        color: userStatus === "ON" ? "green" : "red"
+      }}
+    >
+      Status: {userStatus}
+    </span>
+
+    {userStatus === "OFF" && (
+  <div style={{ marginTop: "6px" }}>
+    <input
+      type="password"
+      placeholder="Status password"
+      value={statusPasswordInput}
+      onChange={(e) => setStatusPasswordInput(e.target.value)}
+      style={{ padding: "4px" }}
+    />
+
+    <button
+      onClick={forceTurnOnUser}
+      style={{
+        marginLeft: "8px",
+        background: "green",
+        color: "white",
+        border: "none",
+        padding: "4px 10px",
+        cursor: "pointer"
+      }}
+    >
+      ON
+    </button>
+  </div>
+)}
+  </div>
+)}
+
+
         </form>
         <button
           className="theme-toggle icon-toggle"

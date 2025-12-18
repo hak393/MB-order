@@ -4,7 +4,7 @@ import { query, orderByChild, equalTo } from "firebase/database"; // at top
 import { getDatabase, set, ref, onValue, update, get, remove, push } from 'firebase/database'; // ⬅ added get
 import './Style.css';
 import SellAddProduct from './SellAddProduct';
-
+import { database } from "../firebase/firebase";
 
 
 const firebaseConfig = { databaseURL: 'https://mb-order-60752-default-rtdb.firebaseio.com/' };
@@ -122,6 +122,27 @@ const SellOrder = () => {
 
 
   useEffect(() => {
+  const currentUser = sessionStorage.getItem("currentUser");
+
+  const handleUnload = () => {
+    if (!currentUser) return;
+
+    // ❌ Delete addSellOrder for this user
+    const addSellRef = ref(database, `addSellOrder/${currentUser}`);
+    set(addSellRef, null);
+  };
+
+  window.addEventListener("beforeunload", handleUnload);
+
+  return () => {
+    window.removeEventListener("beforeunload", handleUnload);
+  };
+}, []);
+
+  
+
+
+  useEffect(() => {
     const sellOrdersRef = ref(db, 'sellOrders');
     return onValue(sellOrdersRef, (snap) => {
       const data = snap.val();
@@ -191,54 +212,56 @@ const SellOrder = () => {
 
         // ✅ Always update UI challan display
         setLastChallanNo(maxChallan.toString().padStart(2, "0"));
+        update(ref(db, "challanCounter"), { lastNo: maxChallan });
+
       } else {
         setLastChallanNo("00");
         update(ref(db, "challanCounter"), { lastNo: 0 });
       }
-if (withChallan.length > 0) {
-  const today = new Date();
+      if (withChallan.length > 0) {
+        const today = new Date();
 
-  // Find the latest challan entry
-  const latestOrder = withChallan.reduce((latest, current) => {
-    return new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest;
-  });
+        // Find the latest challan entry
+        const latestOrder = withChallan.reduce((latest, current) => {
+          return new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest;
+        });
 
-  const latestDate = new Date(latestOrder.timestamp);
-  const sameMonth =
-    latestDate.getMonth() === today.getMonth() &&
-    latestDate.getFullYear() === today.getFullYear();
+        const latestDate = new Date(latestOrder.timestamp);
+        const sameMonth =
+          latestDate.getMonth() === today.getMonth() &&
+          latestDate.getFullYear() === today.getFullYear();
 
-  let maxChallan = 0;
+        let maxChallan = 0;
 
-  if (sameMonth) {
-    // ✅ Continue same month's challan numbering
-    maxChallan = Math.max(
-      ...withChallan
-        .filter(o => {
-          const d = new Date(o.timestamp);
-          return (
-            d.getMonth() === today.getMonth() &&
-            d.getFullYear() === today.getFullYear()
+        if (sameMonth) {
+          // ✅ Continue same month's challan numbering
+          maxChallan = Math.max(
+            ...withChallan
+              .filter(o => {
+                const d = new Date(o.timestamp);
+                return (
+                  d.getMonth() === today.getMonth() &&
+                  d.getFullYear() === today.getFullYear()
+                );
+              })
+              .map(o => parseInt(o.challanNo, 10) || 0)
           );
-        })
-        .map(o => parseInt(o.challanNo, 10) || 0)
-    );
-  } else {
-    // ✅ New month → reset to 0
-    maxChallan = 0;
-    update(ref(db, "challanCounter"), { lastNo: 0 });
-  }
+        } else {
+          // ✅ New month → reset to 0
+          maxChallan = 0;
+          update(ref(db, "challanCounter"), { lastNo: 0 });
+        }
 
-  // ✅ Always update UI challan display
-  setLastChallanNo(maxChallan.toString().padStart(2, "0"));
-} else {
-  setLastChallanNo("00");
-  update(ref(db, "challanCounter"), { lastNo: 0 });
-}
+        // ✅ Always update UI challan display
+        setLastChallanNo(maxChallan.toString().padStart(2, "0"));
+      } else {
+        setLastChallanNo("00");
+        update(ref(db, "challanCounter"), { lastNo: 0 });
+      }
 
 
-withChallan.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-setSellOrders(withChallan);
+      withChallan.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      setSellOrders(withChallan);
 
     });
   }, []);

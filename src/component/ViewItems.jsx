@@ -16,6 +16,8 @@ const ViewItems = () => {
   const [editField1, setEditField1] = useState('');
   const [editField2, setEditField2] = useState('');
   const [editField3, setEditField3] = useState('');
+  const specialUsers = ['ammar bhai', 'huzaifa bhai', 'shop', 'user1', 'user2', 'user3'];
+
 
 
   // Fetch data from Firebase when option changes
@@ -65,6 +67,9 @@ const ViewItems = () => {
       setProducts([]);
     }
   }, [selectedOption]);
+
+  const currentUser = sessionStorage.getItem('currentUser')?.toLowerCase();
+
 
 
   // helper function
@@ -521,22 +526,32 @@ const filteredList =
                             </>
                           ) : (
                             <>
-                              <button onClick={() => handleEdit(item)} style={{ marginRight: '8px' }}>
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleDelete(item.id)}
-                                style={{
-                                  color: 'white',
-                                  background: 'red',
-                                  border: 'none',
-                                  padding: '5px 8px',
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                Delete
-                              </button>
-                            </>
+  {specialUsers.includes(currentUser) ? (
+    <>
+      <button onClick={() => handleEdit(item)} style={{ marginRight: '8px' }}>
+        Edit
+      </button>
+
+      <button
+        onClick={() => handleDelete(item.id)}
+        style={{
+          color: 'white',
+          background: 'red',
+          border: 'none',
+          padding: '5px 8px',
+          cursor: 'pointer'
+        }}
+      >
+        Delete
+      </button>
+    </>
+  ) : (
+    <span style={{ color: 'gray', fontSize: '12px' }}>
+      No Permission
+    </span>
+  )}
+</>
+
                           )}
                         </td>
                       </tr>

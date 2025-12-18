@@ -3,8 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Style.css';
 import { FaUserCircle, FaBars, FaTimes } from 'react-icons/fa';
-
-
+import { onDisconnect } from "firebase/database";
 
 import { database } from '../firebase/firebase';  // import from singleton
 import { ref, onValue, set } from 'firebase/database';
@@ -15,7 +14,70 @@ const Header = ({ onLogout }) => {
   const navigate = useNavigate();
   const [userName, setUserName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false); // ✅ add here
+  const [isLoggingOut, setIsLoggingOut] = useState(false);// ✅ add here
+
+
+
+  useEffect(() => {
+  const currentUser = sessionStorage.getItem("currentUser");
+  if (!currentUser) return;
+
+  const statusRef = ref(database, `users_status/${currentUser}`);
+
+  const unsubscribe = onValue(statusRef, (snap) => {
+    if (snap.exists()) {
+      const { isLoggedIn } = snap.val();
+
+      // 🚨 If user is force-logged out elsewhere
+      if (isLoggedIn === false && !isLoggingOut) {
+        setIsLoggingOut(true);
+
+        // 🔔 Top popup
+        const popup = document.createElement("div");
+        popup.innerHTML = `
+          <div id="forceLogoutToast" style="
+            position: fixed; top: 0; left: 0; width: 100%;
+            background: #dc3545; color: white;
+            padding: 14px 0; font-size: 18px; font-weight: 500;
+            text-align: center; z-index: 9999;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            transform: translateY(-100%);
+            transition: transform 0.4s ease, opacity 0.4s ease;
+            opacity: 0;
+          ">
+            ⚠️ You have been logged out. Redirecting to login...
+          </div>
+        `;
+        document.body.appendChild(popup);
+
+        setTimeout(() => {
+          const el = document.getElementById("forceLogoutToast");
+          if (el) {
+            el.style.transform = "translateY(0)";
+            el.style.opacity = "1";
+          }
+        }, 50);
+
+        // ⏳ Auto logout after 3 seconds
+        setTimeout(() => {
+          sessionStorage.removeItem("currentUser");
+          onLogout();
+          navigate("/");
+
+          const el = document.getElementById("forceLogoutToast");
+          if (el) {
+            el.style.transform = "translateY(-100%)";
+            el.style.opacity = "0";
+            setTimeout(() => el.remove(), 400);
+          }
+        }, 3000);
+      }
+    }
+  });
+
+  return () => unsubscribe();
+}, [navigate, onLogout, isLoggingOut]);
+
   useEffect(() => {
   const storedUser = sessionStorage.getItem('currentUser');
   // 🚨 Handle Unknown user immediately
@@ -63,7 +125,7 @@ if (!storedUser || storedUser.toLowerCase() === 'unknown') {
   // ✅ NEW — Auto mark user as logged out
   const currentUser = sessionStorage.getItem('currentUser');
   if (currentUser) {
-    const statusRef = ref(database, `users_status/${currentUser}`);
+    const statusRef = ref(database, `users_status/${storedUser}`);
     set(statusRef, {
       isLoggedIn: false,
       lastLogin: Date.now()
@@ -206,12 +268,12 @@ const handleLogout = () => {
           <button onClick={() => handleNavigate('/order')} className="view-orders-btn">Order Page</button>
           <button onClick={() => handleNavigate('/view-orders')} className="view-orders-btn">View Orders</button>
           <button onClick={() => handleNavigate('/pending-orders')} className="view-orders-btn">Pending Orders</button>
+          <button onClick={() => handleNavigate('/view-items')} className="view-orders-btn">View Items</button>
           {isAllowedUser && (
             <>
               <button onClick={() => handleNavigate('/user-handle')} className="view-orders-btn">User Handle</button>
               <button onClick={() => handleNavigate('/add-product')} className="view-orders-btn">Add Product</button>
               <button onClick={() => handleNavigate('/sell-order')} className="view-orders-btn">Sell Order</button>
-              <button onClick={() => handleNavigate('/view-items')} className="view-orders-btn">View Items</button>
             </>
           )}
 

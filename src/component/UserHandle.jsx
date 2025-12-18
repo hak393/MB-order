@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect} from 'react';
 import './Style.css';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
@@ -8,6 +8,7 @@ import {
   push,
   get,
   remove,
+  set,
 } from 'firebase/database';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,9 +20,14 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getDatabase(app);
 
 const UserHandle = () => {
+  const [userStatus, setUserStatus] = useState({});
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [users, setUsers] = useState([]);
+  const [statusPassword, setStatusPassword] = useState('');
+  const [showStatusPassword, setShowStatusPassword] = useState(false);
+
+
   const navigate = useNavigate();
 
   const currentUser = sessionStorage.getItem('currentUser')?.toLowerCase();
@@ -37,6 +43,29 @@ const UserHandle = () => {
   }, []);
 
   useEffect(() => {
+  const passRef = ref(db, "user_status_password");
+
+  const unsubscribe = onValue(passRef, (snapshot) => {
+    if (snapshot.exists() && snapshot.val().password) {
+      setStatusPassword(snapshot.val().password); // ✅ show old password
+    }
+  });
+
+  return () => unsubscribe();
+}, []);
+
+
+  useEffect(() => {
+  const statusRef = ref(db, "users_status");
+  const unsubscribe = onValue(statusRef, (snapshot) => {
+    const data = snapshot.val() || {};
+    setUserStatus(data);
+  });
+  return () => unsubscribe();
+}, []);
+
+
+  useEffect(() => {
     const interval = setInterval(() => {
       const deletedUser = localStorage.getItem('deletedUser');
       if (deletedUser && deletedUser.toLowerCase() === currentUser) {
@@ -49,6 +78,30 @@ const UserHandle = () => {
 
     return () => clearInterval(interval);
   }, [currentUser, navigate]);
+
+
+
+  const handleUpdateStatusPassword = async () => {
+  if (!statusPassword.trim()) {
+    showAlert("Status password is required.");
+    return;
+  }
+
+  try {
+    await set(ref(db, "user_status_password"), {
+      password: statusPassword,
+      updatedAt: Date.now()
+    });
+
+    setStatusPassword('');
+    showAlert("Status password saved successfully.", "success");
+  } catch (err) {
+    console.error(err);
+    showAlert("Failed to save status password.");
+  }
+};
+
+
 
   const handleAdd = async () => {
       if (!username.trim() || !password.trim()) {
@@ -147,7 +200,41 @@ const UserHandle = () => {
 
   return (
     <div className="user-handle">
-      <h2>User Manager</h2>
+      <h3>Status Password</h3>
+      <div style={{ position: "relative", width: "100%" }}>
+  <input
+    type={showStatusPassword ? "text" : "password"}
+    placeholder="Status Password"
+    value={statusPassword}
+    onChange={(e) => setStatusPassword(e.target.value)}
+    className="input-field"
+    style={{ paddingRight: "40px" }}
+  />
+
+  <span
+    onClick={() => setShowStatusPassword(prev => !prev)}
+    style={{
+      position: "absolute",
+      right: "12px",
+      top: "50%",
+      transform: "translateY(-50%)",
+      cursor: "pointer",
+      fontSize: "18px",
+      userSelect: "none"
+    }}
+    title={showStatusPassword ? "Hide password" : "Show password"}
+  >
+    {showStatusPassword ? "🙈" : "👁️"}
+  </span>
+</div>
+
+<br />
+
+<button onClick={handleUpdateStatusPassword}>
+  Update Status Password
+</button>
+
+<h2>User Manager</h2>
       <input
   type="text"
   placeholder="Username"
