@@ -80,6 +80,20 @@ const SellOrder = () => {
     return () => unsubscribe(); // cleanup listener
   }, []);
 
+  useEffect(() => {
+  const handleRefreshCleanup = () => {
+    const addOrderRef = ref(db, 'AddSellOrder');
+    set(addOrderRef, null); // ❌ delete AddSellOrder on refresh
+  };
+
+  window.addEventListener("beforeunload", handleRefreshCleanup);
+
+  return () => {
+    window.removeEventListener("beforeunload", handleRefreshCleanup);
+  };
+}, []);
+
+
 
   // --- Add button handler ---
   const handleAddOrder = async (orderId) => {

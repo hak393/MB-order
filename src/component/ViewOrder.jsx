@@ -1018,45 +1018,52 @@ thead tr.copy-title-row {
       <title>Print</title>
       <style>
           @page {
-            size: A5;
-            margin: 10mm;
-          }
-          body {
-            font-family: Arial;
-            padding: 20px;
-            transform: scale(0.85);
-            transform-origin: top left;
-            counter-reset: page;
-          }
-          h2 {
-            text-align: center;
-            margin-bottom: 10px;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-            font-size: 12px;
-          }
-          th, td {
-            border: 1px solid #000;
-            padding: 6px;
-            text-align: center;
-          }
-          thead {
-            display: table-header-group; /* ✅ Repeat header on every page */
-          }
-          .pending-row {
-            font-weight: bold;
-            font-style: italic;
-            text-transform: uppercase;
-            background-color: #000000ff;
-            border-top: 2px solid #000000ff;
-          }
-          .page-number:after {
-            counter-increment: page;
-            content: "Page " counter(page);
-          }
+  size: A5;
+  margin: 6mm;
+}
+
+body {
+  font-family: Arial;
+  margin: 0;
+  padding: 0;
+  counter-reset: page;
+}
+
+h2 {
+  font-size: 20px;   /* ⬆ increased */
+  margin: 6px 0;
+  text-align: center;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;   /* ⬆ increased */
+}
+
+th, td {
+  border: 1px solid #000;
+  padding: 4px 9px;  /* ⬆ slightly increased for readability */
+  text-align: center;
+}
+
+thead {
+  display: table-header-group;
+}
+
+.pending-row {
+  font-weight: bold;
+  font-style: italic;
+  text-transform: uppercase;
+  background-color: #000000ff;
+  border-top: 2px solid #000000ff;
+}
+
+.page-number:after {
+  counter-increment: page;
+  content: "Page " counter(page);
+}
+
       </style>
   </head>
   <body>
