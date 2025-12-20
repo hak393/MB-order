@@ -828,53 +828,57 @@ const updateOldItem = async () => {
         </div>
         <input placeholder="City" value={city} onChange={e => setCity(e.target.value)} />
         <div className="autocomplete-wrapper" style={{ position: 'relative' }}>
-          <input
-            placeholder="Product"
-            value={productName}
-            onChange={e => {
-              const val = e.target.value;
-              setProductName(val);
+  <input
+    placeholder="Product"
+    value={productName}
+    onChange={e => {
+      const val = e.target.value;
+      setProductName(val);
 
-              // ✅ Reset justSelectedProduct if user types something new
-              if (val !== productName) {
-                setJustSelectedProduct(false);
-              }
-            }}
-            onKeyDown={handleProductKeyDown}
-            onBlur={handleProductBlur}
-            autoComplete="off"
-            className={productError ? 'input-error' : ''}
-            ref={productInputRef}
-          />
+      // ✅ Reset justSelectedProduct if user types something new
+      if (val !== productName) {
+        setJustSelectedProduct(false);
+      }
+    }}
+    onKeyDown={handleProductKeyDown}
+    onBlur={handleProductBlur}
+    autoComplete="off"
+    className={productError ? 'input-error' : ''}
+    ref={productInputRef}
+  />
 
-
-
-          {/* ✅ Only show dropdown in Add mode */}
-          {prodSuggestions.length > 0 && (
-
-            <ul
-              className="suggestions-dropdown"
-              ref={productListRef}
-              style={{ position: 'absolute', zIndex: 10 }}
-            >
-              {prodSuggestions.map((p, i) => (
-                <li
-                  key={i}
-                  className={i === highlightedProdIndex ? 'highlighted' : ''}
-                  onClick={() => selectProduct(p)}
-                >
-                  {p.name}
-                  {(p.price || p.less) && (
-                    <> — {p.price && <>Price {p.price}</>}
-                      {p.price && p.less && ' / '}
-                      {p.less && <>Less {p.less}</>}
-                    </>
-                  )}
-                </li>
-              ))}
-            </ul>
+  {/* ✅ Only show dropdown in Add mode */}
+  {prodSuggestions.length > 0 && (
+    <ul
+      className="suggestions-dropdown"
+      ref={productListRef}
+      style={{
+        position: 'absolute',
+        top: '100%',
+        left: 0,
+        right: 0,
+        zIndex: 10
+      }}
+    >
+      {prodSuggestions.map((p, i) => (
+        <li
+          key={i}
+          className={i === highlightedProdIndex ? 'highlighted' : ''}
+          onClick={() => selectProduct(p)}
+        >
+          {p.name}
+          {(p.price || p.less) && (
+            <> — {p.price && <>Price {p.price}</>}
+            {p.price && p.less && ' / '}
+            {p.less && <>Less {p.less}</>}
+            </>
           )}
-        </div>
+        </li>
+      ))}
+    </ul>
+  )}
+</div>
+
         <input
           placeholder="Qty"
           value={qty}
