@@ -3,35 +3,30 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Style.css';
 import { FaUserCircle, FaBars, FaTimes } from 'react-icons/fa';
-import { onDisconnect } from "firebase/database";
-
 import { database } from '../firebase/firebase';  // import from singleton
 import { ref, onValue, set } from 'firebase/database';
+import { onDisconnect } from "firebase/database";
 
-const specialUsers = ['ammar bhai', 'huzaifa bhai', 'shop','user1', 'user2', 'user3'];
-
+const specialUsers = ['ammar bhai','extra', 'huzaifa bhai', 'shop','user1', 'user2', 'user3'];
 const Header = ({ onLogout }) => {
   const navigate = useNavigate();
   const [userName, setUserName] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);// ✅ add here
+  const userHandleUsers = ['ammar bhai', 'huzaifa bhai','extra'];
 
-
+  
 
   useEffect(() => {
   const currentUser = sessionStorage.getItem("currentUser");
   if (!currentUser) return;
-
   const statusRef = ref(database, `users_status/${currentUser}`);
-
   const unsubscribe = onValue(statusRef, (snap) => {
     if (snap.exists()) {
       const { isLoggedIn } = snap.val();
-
       // 🚨 If user is force-logged out elsewhere
       if (isLoggedIn === false && !isLoggingOut) {
         setIsLoggingOut(true);
-
         // 🔔 Top popup
         const popup = document.createElement("div");
         popup.innerHTML = `
@@ -49,7 +44,6 @@ const Header = ({ onLogout }) => {
           </div>
         `;
         document.body.appendChild(popup);
-
         setTimeout(() => {
           const el = document.getElementById("forceLogoutToast");
           if (el) {
@@ -57,13 +51,11 @@ const Header = ({ onLogout }) => {
             el.style.opacity = "1";
           }
         }, 50);
-
         // ⏳ Auto logout after 3 seconds
         setTimeout(() => {
           sessionStorage.removeItem("currentUser");
           onLogout();
           navigate("/");
-
           const el = document.getElementById("forceLogoutToast");
           if (el) {
             el.style.transform = "translateY(-100%)";
@@ -74,13 +66,33 @@ const Header = ({ onLogout }) => {
       }
     }
   });
-
   return () => unsubscribe();
 }, [navigate, onLogout, isLoggingOut]);
 
+useEffect(() => {
+  const currentUser = sessionStorage.getItem("currentUser");
+  if (!currentUser) return;
+
+  const statusRef = ref(database, `users_status/${currentUser}`);
+
+  // ✅ Mark user ONLINE immediately
+  set(statusRef, {
+    isLoggedIn: true,
+    lastLogin: Date.now()
+  });
+
+  // ✅ AUTO mark OFFLINE if tab closes / crash / refresh
+  onDisconnect(statusRef).set({
+    isLoggedIn: false,
+    lastLogin: Date.now()
+  });
+
+}, []);
+
+
+
   useEffect(() => {
   const storedUser = sessionStorage.getItem('currentUser');
-  // 🚨 Handle Unknown user immediately
   // 🚨 Handle Unknown user immediately
 if (!storedUser || storedUser.toLowerCase() === 'unknown') {
   if (!isLoggingOut) {
@@ -101,7 +113,6 @@ if (!storedUser || storedUser.toLowerCase() === 'unknown') {
       </div>
     `;
     document.body.appendChild(popup);
-
     setTimeout(() => {
       const alertBox = document.getElementById("loginAlert");
       if (alertBox) {
@@ -109,7 +120,6 @@ if (!storedUser || storedUser.toLowerCase() === 'unknown') {
         alertBox.style.opacity = "1";
       }
     }, 50);
-
     setTimeout(() => {
       const alertBox = document.getElementById("loginAlert");
       if (alertBox) {
@@ -121,8 +131,6 @@ if (!storedUser || storedUser.toLowerCase() === 'unknown') {
       }
     }, 2000);
   }
-
-  // ✅ NEW — Auto mark user as logged out
   const currentUser = sessionStorage.getItem('currentUser');
   if (currentUser) {
     const statusRef = ref(database, `users_status/${storedUser}`);
@@ -131,47 +139,26 @@ if (!storedUser || storedUser.toLowerCase() === 'unknown') {
       lastLogin: Date.now()
     });
   }
-  // 🔄 Auto unlock user when page/tab is closed
-window.addEventListener("beforeunload", () => {
-  const currentUser = sessionStorage.getItem("currentUser");
-  if (currentUser) {
-    const statusRef = ref(database, `users_status/${currentUser}`);
-    set(statusRef, {
-      isLoggedIn: false,
-      lastLogin: Date.now()
-    });
-  }
-});
-
-
   // Existing logout logic
   onLogout();
   sessionStorage.removeItem('currentUser');
   navigate('/');
   return;
 }
-
-
-
-
   setUserName(storedUser);
-
   // Skip firebase check for special users
   if (specialUsers.includes(storedUser.toLowerCase())) {
     return;
   }
-
   const usersRef = ref(database, 'users');
   const unsubscribe = onValue(usersRef, (snapshot) => {
     const usersData = snapshot.val() || {};
     const usersArray = Object.values(usersData);
-
     if (storedUser) {
       const lowerStoredUser = storedUser.toLowerCase();
       const userExists = usersArray.some(u =>
         u.toLowerCase().startsWith(lowerStoredUser + ':')
       );
-
       if (!userExists) {
         alert('Your account has been deleted or you are not authorized. Logging out.');
         onLogout();
@@ -180,20 +167,15 @@ window.addEventListener("beforeunload", () => {
       }
     }
   });
-
   return () => {
     unsubscribe();
   };
 }, [navigate, onLogout]);
-
-
   const isAllowedUser = specialUsers.includes(userName.toLowerCase());
-
   const handleNavigate = (path) => {
     navigate(path);
     setMenuOpen(false);
   };
-
 const handleLogout = () => {
   // ✅ Create linear toast popup
   const popup = document.createElement("div");
@@ -212,7 +194,6 @@ const handleLogout = () => {
     </div>
   `;
   document.body.appendChild(popup);
-
   // 🔽 Slide down
   setTimeout(() => {
     const toast = document.getElementById("logoutToast");
@@ -224,22 +205,21 @@ const handleLogout = () => {
 
   // ⏳ Wait, then logout
   setTimeout(() => {
-    setIsLoggingOut(true);
+  const currentUser = sessionStorage.getItem("currentUser");
 
-    // 🔓 Unlock user in Firebase
-    const currentUser = sessionStorage.getItem("currentUser");
-    if (currentUser) {
-      const statusRef = ref(database, `users_status/${currentUser}`);
-      set(statusRef, {
-        isLoggedIn: false,
-        lastLogin: Date.now()
-      });
-    }
+  // ✅ FORCE status to false (safety write)
+  if (currentUser) {
+    const statusRef = ref(database, `users_status/${currentUser}`);
+    set(statusRef, {
+      isLoggedIn: false,
+      lastLogin: Date.now()
+    });
+  }
 
-    onLogout();
-    setMenuOpen(false);
-    sessionStorage.removeItem("currentUser");
-    navigate("/");
+  sessionStorage.removeItem("currentUser");
+  onLogout();
+  navigate("/");
+
 
     // 🔼 Slide up and remove toast
     const toast = document.getElementById("logoutToast");
@@ -269,11 +249,20 @@ const handleLogout = () => {
           <button onClick={() => handleNavigate('/view-orders')} className="view-orders-btn">View Orders</button>
           <button onClick={() => handleNavigate('/pending-orders')} className="view-orders-btn">Pending Orders</button>
           <button onClick={() => handleNavigate('/view-items')} className="view-orders-btn">View Items</button>
+          
           {isAllowedUser && (
             <>
-              <button onClick={() => handleNavigate('/user-handle')} className="view-orders-btn">User Handle</button>
               <button onClick={() => handleNavigate('/add-product')} className="view-orders-btn">Add Product</button>
               <button onClick={() => handleNavigate('/sell-order')} className="view-orders-btn">Sell Order</button>
+              {userHandleUsers.includes(userName.toLowerCase()) && (
+  <button
+    onClick={() => handleNavigate('/user-handle')}
+    className="view-orders-btn"
+  >
+    User Handle
+  </button>
+)}
+
             </>
           )}
 
@@ -281,23 +270,6 @@ const handleLogout = () => {
         </div>
 
         {/* Slide menu for mobile */}
-        <nav className={`mobile-slide-menu ${menuOpen ? 'open' : ''}`}>
-          <button onClick={() => handleNavigate('/order')} className="slide-menu-btn">Order Page</button>
-          <button onClick={() => handleNavigate('/view-orders')} className="slide-menu-btn">View Orders</button>
-          <button onClick={() => handleNavigate('/pending-orders')} className="slide-menu-btn">Pending Orders</button>
-          <button onClick={() => handleNavigate('/view-items')} className="slide-menu-btn">View Items</button>
-          <button onClick={() => handleNavigate('/edit-add-product')} className="slide-menu-btn">Add Product</button> {/* NEW BUTTON */}
-
-          {isAllowedUser && (
-            <>
-              <button onClick={() => handleNavigate('/user-handle')} className="slide-menu-btn">User Handle</button>
-              <button onClick={() => handleNavigate('/add-product')} className="slide-menu-btn">Add Product</button>
-              <button onClick={() => handleNavigate('/sell-order')} className="slide-menu-btn">Sell Order</button>
-            </>
-          )}
-
-          <button onClick={handleLogout} className="slide-menu-btn logout-btn">Logout</button>
-        </nav>
 
 
         {/* Hamburger icon for mobile */}
@@ -315,9 +287,17 @@ const handleLogout = () => {
 
         {isAllowedUser && (
           <>
-            <button onClick={() => handleNavigate('/user-handle')} className="slide-menu-btn">User Handle</button>
             <button onClick={() => handleNavigate('/add-product')} className="slide-menu-btn">Add Product</button>
             <button onClick={() => handleNavigate('/sell-order')} className="slide-menu-btn">Sell Order</button>
+            {userHandleUsers.includes(userName.toLowerCase()) && (
+  <button
+    onClick={() => handleNavigate('/user-handle')}
+    className="slide-menu-btn"
+  >
+    User Handle
+  </button>
+)}
+
           </>
         )}
 
