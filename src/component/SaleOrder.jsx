@@ -758,7 +758,7 @@ thead tr.copy-title-row {
       return (
         order.customerName?.toLowerCase() === searchTerm.toLowerCase() &&
         orderMonth === filterMonth &&
-        orderYear == filterYear
+        orderYear === filterYear
       );
     });
 

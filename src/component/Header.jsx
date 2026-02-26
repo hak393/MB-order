@@ -92,8 +92,7 @@ useEffect(() => {
   return () => {
     window.removeEventListener("beforeunload", handleTabClose);
   };
-}, []);
-
+}, [isLoggingOut, lastValidUser]);
 
   useEffect(() => {
   const storedUser = sessionStorage.getItem('currentUser');
