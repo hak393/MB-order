@@ -40,8 +40,6 @@ const EditAddProduct = () => {
   const [note, setNote] = useState("");
 
 
-  const [matchedOrders, setMatchedOrders] = useState([]);
-
 
 
   const refDebCust = useRef(null),
