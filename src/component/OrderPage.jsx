@@ -703,15 +703,6 @@ setLessUnit(
   onKeyDown={handleKeyDown}
 />
 
-{/* <input
-  placeholder="Weight"
-  value={weight}
-  onChange={e => setWeight(e.target.value)}
-  onKeyDown={handleKeyDown}   // ✅ added
-  style={{ display: 'none' }}  // ✅ hide weight input
-/> */}
-
-
 <input
   placeholder="Less Value"
   value={lessVal}

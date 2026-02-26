@@ -14,6 +14,7 @@ const db = getDatabase(app);
 
 
 const ViewOrder = () => {
+  const [scrapValue, setScrapValue] = useState(0);
   const [orders, setOrders] = useState([]);
   const [userName, setUserName] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -172,6 +173,7 @@ flat.sort((a, b) => {
   const combinedItems = [...pendingItems, ...normalItems];
 
   setEditOrderData({
+    scrap: orderData.scrap || 0, // 🔥 scrap comes from THAT order only
     user, // original order owner
     customerName,
     city: orderData.city,
@@ -369,7 +371,15 @@ flat.sort((a, b) => {
         console.error("Error updating challanCounter:", err);
       }
 
-      await printSoldItems(customerName, city, sellItems, phoneNumber, transportName, newChallanNo);
+      await printSoldItems(
+  customerName,
+  city,
+  sellItems,
+  phoneNumber,
+  transportName,
+  newChallanNo,
+  editOrderData.scrap   // ✅ PASS SCRAP HERE
+);
 
 
       await push(ref(db, 'sellOrders'), {
@@ -378,8 +388,14 @@ flat.sort((a, b) => {
   city,
   transportName: transportName || '',
   challanNo: newChallanNo,
-  timestamp: localISO, // ✅ ALWAYS use current timestamp
-  
+  timestamp: localISO,
+
+  scrap:
+    editOrderData.scrap !== undefined &&
+    editOrderData.scrap !== ""
+      ? Number(editOrderData.scrap)
+      : null,
+
   items: sellItems.map(i => ({
     productName: i.productName,
     originalQty: i.originalQty,
@@ -443,7 +459,7 @@ flat.sort((a, b) => {
   const cleanProductName = n => n.replace(/\s*\([^)]*\)/g, '').trim();
 
 
-const printSoldItems = (customerName, city, sold, phoneNumber, transportName, challanNo) => {
+const printSoldItems = (customerName, city, sold, phoneNumber, transportName, challanNo, scrap) => {
   const today = new Date();
   const date = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
 
@@ -512,9 +528,21 @@ const tbodyHTML = rowChunks
       <div><strong>Date:</strong> ${date}</div>
     </div>
     <div style="display:flex; justify-content:space-between; width:100%; font-size:12px; margin-top:5px;">
-      <div><strong>Phone:</strong> ${phoneNumber || '-'}</div>
-      <div><strong>Transport:</strong> ${transportName || '-'}</div>
-    </div>
+  <div><strong>Phone:</strong> ${phoneNumber || '-'}</div>
+
+  <div style="text-align:right;">
+    <div><strong>Transport:</strong> ${transportName || '-'}</div>
+
+    ${
+  scrap &&
+  String(scrap).trim() !== ""
+    ? `
+<div style="font-size:15px"><strong>Scrap:</strong> ${scrap}</div>
+`
+    : ""
+}
+  </div>
+</div>
   `;
 
   const w = window.open('', '_blank', 'width=900,height=650');
@@ -743,7 +771,7 @@ thead tr.copy-title-row {
           }
         }
       }
-      printSoldItems(customerName, city, sold, phoneNumber, transportName);
+      printSoldItems(customerName, city, sold, phoneNumber, transportName,editOrderData?.scrap);
     } catch (err) {
       console.error("Error fetching phone:", err);
       printSoldItems(customerName, city, sold, "-");
@@ -1820,30 +1848,46 @@ ${orderData.note ? `
               Sell Order: {editOrderData.customerName}
             </h2>
             <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-              <label htmlFor="transportName" style={{ marginRight: '10px' }}>
-                Transport Name:
-              </label>
-              <input
-                type="text"
-                id="transportName"
-                value={transportName}
-                onChange={(e) => setTransportName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const firstSellInput = document.querySelector('input[data-row="0"][data-col="sellQty"]');
-                    if (firstSellInput) firstSellInput.focus();
-                  }
-                }}
-                style={{
-                  padding: '5px 10px',
-                  width: '200px',
-                  borderRadius: '5px',
-                  border: '1px solid #ccc',
-                }}
-              />
+  <label htmlFor="transportName" style={{ marginRight: '10px' }}>
+    Transport Name:
+  </label>
 
-            </div>
+  <input
+    type="text"
+    id="transportName"
+    value={transportName}
+    onChange={(e) => setTransportName(e.target.value)}
+    style={{
+      padding: '5px 10px',
+      width: '200px',
+      borderRadius: '5px',
+      border: '1px solid #ccc',
+      marginRight: '20px'
+    }}
+  />
+
+  {/* ✅ SCRAP FIELD HERE */}
+  <label style={{ marginRight: '10px' }}>
+    Scrap:
+  </label>
+
+  <input
+    type="number"
+    value={editOrderData?.scrap || ""}
+    onChange={(e) => {
+      setEditOrderData({
+        ...editOrderData,
+        scrap: e.target.value
+      });
+    }}
+    style={{
+      padding: '5px 10px',
+      width: '120px',
+      borderRadius: '5px',
+      border: '1px solid #ccc'
+    }}
+  />
+</div>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
@@ -2120,24 +2164,50 @@ ${orderData.note ? `
                     const pendingItems = updatedItems.filter(i => i.isPending);
 
                     await update(ref(db, `orders/${user}/${orderId}`), {
-                      ...orderData,
-                      transportName: transportName || "",
-                      items: normalItems,
-                      pendingOrderRows: pendingItems
-                    });
+  ...orderData,
+  transportName: transportName || "",
+  items: normalItems,
+  pendingOrderRows: pendingItems,
+  scrap:
+    editOrderData.scrap !== undefined &&
+    editOrderData.scrap !== ""
+      ? Number(editOrderData.scrap)
+      : null
+});
 
                     setOrders(prev =>
-                      prev.map(order =>
-                        order.orderId === orderId && order.user === user
-                          ? { ...order, orderData: { ...orderData, items: normalItems, pendingOrderRows: pendingItems } }
-                          : order
-                      )
-                    );
+  prev.map(order =>
+    order.orderId === orderId && order.user === user
+      ? {
+          ...order,
+          orderData: {
+            ...orderData,
+            items: normalItems,
+            pendingOrderRows: pendingItems,
+            scrap:
+              editOrderData.scrap !== undefined &&
+              editOrderData.scrap !== ""
+                ? Number(editOrderData.scrap)
+                : null
+          }
+        }
+      : order
+  )
+);
                     setEditOrderData(prev => ({
-                      ...prev,
-                      orderData: { ...orderData, items: normalItems, pendingOrderRows: pendingItems },
-                      items: updatedItems
-                    }));
+  ...prev,
+  orderData: {
+    ...orderData,
+    items: normalItems,
+    pendingOrderRows: pendingItems,
+    scrap:
+      editOrderData.scrap !== undefined &&
+      editOrderData.scrap !== ""
+        ? Number(editOrderData.scrap)
+        : null
+  },
+  items: updatedItems
+}));
                   } catch (err) {
                     console.error("Error updating order:", err);
                   } finally {

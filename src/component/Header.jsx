@@ -6,7 +6,7 @@ import { FaUserCircle, FaBars, FaTimes } from 'react-icons/fa';
 import { database } from '../firebase/firebase';  // import from singleton
 import { ref, onValue, set } from 'firebase/database';
 import { onDisconnect } from "firebase/database";
-
+import { serverTimestamp } from "firebase/database";
 const specialUsers = ['ammar bhai','extra', 'huzaifa bhai', 'shop','user1', 'user2', 'user3'];
 const Header = ({ onLogout }) => {
   const navigate = useNavigate();
@@ -14,6 +14,7 @@ const Header = ({ onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);// ✅ add here
   const userHandleUsers = ['ammar bhai', 'huzaifa bhai','extra'];
+  const [lastValidUser, setLastValidUser] = useState(null);
 
   
 
@@ -75,20 +76,23 @@ useEffect(() => {
 
   const statusRef = ref(database, `users_status/${currentUser}`);
 
-  // ✅ Mark user ONLINE immediately
-  set(statusRef, {
-    isLoggedIn: true,
-    lastLogin: Date.now()
-  });
+  const handleTabClose = () => {
+    const nav = performance.getEntriesByType("navigation")[0];
+    if (nav && nav.type === "reload") return; // ✅ prevent refresh logout
 
-  // ✅ AUTO mark OFFLINE if tab closes / crash / refresh
-  onDisconnect(statusRef).set({
-    isLoggedIn: false,
-    lastLogin: Date.now()
-  });
+    set(statusRef, {
+      isLoggedIn: false,
+      lastLogout: Date.now()
+    });
+  };
 
+  // ✅ Real tab/browser close only
+  window.addEventListener("beforeunload", handleTabClose);
+
+  return () => {
+    window.removeEventListener("beforeunload", handleTabClose);
+  };
 }, []);
-
 
 
   useEffect(() => {
@@ -131,14 +135,13 @@ if (!storedUser || storedUser.toLowerCase() === 'unknown') {
       }
     }, 2000);
   }
-  const currentUser = sessionStorage.getItem('currentUser');
-  if (currentUser) {
-    const statusRef = ref(database, `users_status/${storedUser}`);
-    set(statusRef, {
-      isLoggedIn: false,
-      lastLogin: Date.now()
-    });
-  }
+  if (lastValidUser) {
+  const statusRef = ref(database, `users_status/${lastValidUser}`);
+  set(statusRef, {
+    isLoggedIn: false,
+    lastLogout: Date.now()
+  });
+}
   // Existing logout logic
   onLogout();
   sessionStorage.removeItem('currentUser');
@@ -146,6 +149,7 @@ if (!storedUser || storedUser.toLowerCase() === 'unknown') {
   return;
 }
   setUserName(storedUser);
+setLastValidUser(storedUser);
   // Skip firebase check for special users
   if (specialUsers.includes(storedUser.toLowerCase())) {
     return;

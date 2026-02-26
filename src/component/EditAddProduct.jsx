@@ -373,7 +373,13 @@ const EditAddProduct = () => {
 
 
   const handleCustomerBlur = () => { if (!validCustomer) setCustomerError(true); };
-  const handleProductBlur = () => { if (!validProduct) setProductError(true); };
+  const handleProductBlur = () => {
+  // ⏱ allow click on suggestion before blur closes dropdown
+  setTimeout(() => {
+    if (!validProduct) setProductError(true);
+  }, 150);
+};
+
 
   const fetchPendingOrders = async (n, c) => {
     try {
@@ -583,32 +589,28 @@ const EditAddProduct = () => {
       const deleteMatchedItem = async (index) => {
   if (!matchedOrder?.user || !matchedOrder?.orderId) return;
 
-  // exact firebase path to delete only that row
-  const itemRef = ref(
-    db,
-    `orders/${matchedOrder.user}/${matchedOrder.orderId}/items/${index}`
-  );
+  const item = matchedOrder.items?.[index];
+  if (!item?.id) return; // 🔥 IMPORTANT
 
   try {
-    await remove(itemRef);
+    // ✅ Delete from Firebase using REAL child key
+    await remove(
+      ref(
+        db,
+        `orders/${matchedOrder.user}/${matchedOrder.orderId}/items/${item.id}`
+      )
+    );
 
-    // update UI
-    setMatchedOrder(prev => {
-      if (!prev) return prev;
+    // ✅ Instantly update UI
+    setMatchedOrder(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index)
+    }));
 
-      const updated = { ...prev };
-
-      // remove from items array at specific index
-      updated.items = prev.items ? prev.items.filter((_, i) => i !== index) : [];
-
-      return updated;
-    });
-
-  } catch (error) {
-    console.error("Error deleting item:", error);
+  } catch (err) {
+    console.error("Error deleting matched item:", err);
   }
 };
-
 
 
 
@@ -793,6 +795,34 @@ const updateOldItem = async () => {
       setPendingOrders(p => p.filter((_, x) => x !== i));
     } catch { showAlert('Failed to delete pending item'); }
   };
+
+  const deleteMatchedItem = async (index) => {
+  if (!matchedOrder?.user || !matchedOrder?.orderId) return;
+
+  const item = matchedOrder.items?.[index];
+  if (!item) return;
+
+  try {
+    // 🔥 Remove from Firebase
+    await remove(
+      ref(
+        db,
+        `orders/${matchedOrder.user}/${matchedOrder.orderId}/items/${index}`
+      )
+    );
+
+    // 🔥 Update UI instantly
+    setMatchedOrder(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index)
+    }));
+
+  } catch (err) {
+    console.error("Delete failed:", err);
+    showAlert("Failed to delete item");
+  }
+};
+
   const removePendingItemUI = i => setPendingOrders(p => p.filter((_, x) => x !== i));
   const deleteNewItem = i => setCustomers(p => { const e = p[custName]; return { ...p, [custName]: { ...e, items: e.items.filter((_, x) => x !== i) } }; });
 
@@ -810,13 +840,6 @@ const updateOldItem = async () => {
       productInputRef.current?.focus();
     }
   }, [matchedOrder]);
-  const deleteMatchedItem = (i) => {
-    setMatchedOrder(prev => {
-      if (!prev?.items) return prev;
-      const updatedItems = prev.items.filter((_, idx) => idx !== i);
-      return { ...prev, items: updatedItems };
-    });
-  };
 
 
   return (
@@ -850,16 +873,17 @@ const updateOldItem = async () => {
   {/* ✅ Only show dropdown in Add mode */}
   {prodSuggestions.length > 0 && (
     <ul
-      className="suggestions-dropdown"
-      ref={productListRef}
-      style={{
-        position: 'absolute',
-        top: '100%',
-        left: 0,
-        right: 0,
-        zIndex: 10
-      }}
-    >
+  className="suggestions-dropdown"
+  ref={productListRef}
+  style={{
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    zIndex: 10
+  }}
+>
+
       {prodSuggestions.map((p, i) => (
         <li
           key={i}
@@ -1040,6 +1064,7 @@ const updateOldItem = async () => {
                       </td>
                     </tr>
                   ))}
+                  
                   {/* pending items (editable) */}
                   {pendingOrders.map((item, i) => (
                     <tr key={i} className="pending-row">

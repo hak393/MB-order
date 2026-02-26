@@ -288,6 +288,7 @@ const SellOrder = () => {
       temp.innerHTML = text;
       return temp.value;
     };
+    
 
     const content = printRefs.current[id];
     if (!content) return;
@@ -295,6 +296,7 @@ const SellOrder = () => {
 
     // ✅ Find the order object from state
     const order = sellOrders.find(o => o.id === id);
+    const scrapValue = order?.scrap ?? "-";
 
     // ✅ Extract customer name & city from header
     const headerDiv = content.querySelector(".order-header");
@@ -361,20 +363,42 @@ const SellOrder = () => {
     }
 
 
-    const headerHTML = `
-    <div style="display:flex; justify-content:space-between; width:100%; font-size:20px;">
-      <div><strong>Customer:</strong> ${customerName}</div>
-      <div><strong>Challan No.:</strong> ${order.challanNo || '-'}</div>
+const headerHTML = `
+  <div style="display:flex; justify-content:space-between; width:100%; font-size:20px;">
+    <div><strong>Customer:</strong> ${customerName}</div>
+    <div><strong>Challan No.:</strong> ${order.challanNo || '-'}</div>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; width:100%; font-size:20px;">
+    <div><strong>City:</strong> ${city}</div>
+    <div><strong>Date:</strong> ${formattedDate}</div>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; width:100%; font-size:12px; margin-top:5px;">
+  <div>
+    <strong>Phone:</strong> ${phoneNumber}
+  </div>
+
+  <div style="text-align:right;">
+    <div>
+      <strong>Transport:</strong> ${order?.transportName || ""}
     </div>
-    <div style="display:flex; justify-content:space-between; width:100%; font-size:20px;">
-      <div><strong>City:</strong> ${city}</div>
-      <div><strong>Date:</strong> ${formattedDate}</div>
+
+    ${
+      order?.scrap !== undefined &&
+      order?.scrap !== null &&
+      order?.scrap !== ""
+        ? `
+    <div style="font-size:15px">
+      <strong>Scrap:</strong> ${order.scrap}
     </div>
-    <div style="display:flex; justify-content:space-between; width:100%; font-size:12px; margin-top:5px;">
-      <div><strong>Phone:</strong> ${phoneNumber}</div>
-      <div><strong>Transport:</strong> ${transportName}</div>
-    </div>
-  `;
+    `
+        : ``
+    }
+  </div>
+</div>
+  </div>
+`;
 
     // ✅ Build table rows
     // ✅ Build table rows with 15 items per page
@@ -934,6 +958,7 @@ thead tr.copy-title-row {
                   <strong>Customer:</strong> {order.customerName} <br />
                   <strong>City:</strong> {order.city} <br />
                   <strong>Transport:</strong> {order.transportName || '-'} <br />
+                  <strong>Scrap:</strong> {order.scrap ?? '-'} <br />
                   <strong>User:</strong> {order.user} <br />
                   <strong>Date:</strong> {(() => {
                     const ts = order.timestamp;
@@ -1047,6 +1072,7 @@ thead tr.copy-title-row {
                   >
                     <strong>Customer:</strong> {order.customerName} <br />
                     <strong>City:</strong> {order.city} <br />
+                    <strong>Scrap:</strong> {order.scrap ?? '-'} <br />
                     <strong>Transport:</strong> {order.transportName || '-'} <br />
                     <strong>User:</strong> {order.user} <br />
                     <strong>Date:</strong> {(() => {
