@@ -385,9 +385,10 @@ const headerHTML = `
     </div>
 
     ${
-      order?.scrap !== undefined &&
-      order?.scrap !== null &&
-      order?.scrap !== ""
+  order?.scrap !== undefined &&
+  order?.scrap !== null &&
+  order?.scrap !== "" &&
+  Number(order?.scrap) !== 0
         ? `
     <div style="font-size:15px">
       <strong>Scrap:</strong> ${order.scrap}
@@ -758,7 +759,7 @@ thead tr.copy-title-row {
       return (
         order.customerName?.toLowerCase() === searchTerm.toLowerCase() &&
         orderMonth === filterMonth &&
-        orderYear === filterYear
+        orderYear == filterYear
       );
     });
 
