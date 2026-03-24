@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import './Style.css';
 import { FaUserCircle, FaBars, FaTimes } from 'react-icons/fa';
 import { database } from '../firebase/firebase';  // import from singleton
-import { ref, onValue, set , get} from 'firebase/database';
+import { ref, onValue, set } from 'firebase/database';
 import { onDisconnect } from "firebase/database";
 import { serverTimestamp } from "firebase/database";
 const specialUsers = ['ammar bhai','extra', 'huzaifa bhai', 'shop','user1', 'user2', 'user3'];
@@ -21,22 +21,14 @@ const Header = ({ onLogout }) => {
   useEffect(() => {
   const currentUser = sessionStorage.getItem("currentUser");
   if (!currentUser) return;
-
   const statusRef = ref(database, `users_status/${currentUser}`);
-
-  // ✅ ADD THIS BLOCK (important fix)
-  onDisconnect(statusRef).set({
-    isLoggedIn: false,
-    lastLogout: Date.now()
-  });
-
   const unsubscribe = onValue(statusRef, (snap) => {
     if (snap.exists()) {
       const { isLoggedIn } = snap.val();
-
+      // 🚨 If user is force-logged out elsewhere
       if (isLoggedIn === false && !isLoggingOut) {
         setIsLoggingOut(true);
-
+        // 🔔 Top popup
         const popup = document.createElement("div");
         popup.innerHTML = `
           <div id="forceLogoutToast" style="
@@ -53,7 +45,6 @@ const Header = ({ onLogout }) => {
           </div>
         `;
         document.body.appendChild(popup);
-
         setTimeout(() => {
           const el = document.getElementById("forceLogoutToast");
           if (el) {
@@ -61,12 +52,11 @@ const Header = ({ onLogout }) => {
             el.style.opacity = "1";
           }
         }, 50);
-
+        // ⏳ Auto logout after 3 seconds
         setTimeout(() => {
-          localStorage.removeItem("currentUser");
+          sessionStorage.removeItem("currentUser");
           onLogout();
           navigate("/");
-
           const el = document.getElementById("forceLogoutToast");
           if (el) {
             el.style.transform = "translateY(-100%)";
@@ -77,10 +67,32 @@ const Header = ({ onLogout }) => {
       }
     }
   });
-
   return () => unsubscribe();
 }, [navigate, onLogout, isLoggingOut]);
 
+useEffect(() => {
+  const currentUser = sessionStorage.getItem("currentUser");
+  if (!currentUser) return;
+
+  const statusRef = ref(database, `users_status/${currentUser}`);
+
+  const handleTabClose = () => {
+    const nav = performance.getEntriesByType("navigation")[0];
+    if (nav && nav.type === "reload") return; // ✅ prevent refresh logout
+
+    set(statusRef, {
+      isLoggedIn: false,
+      lastLogout: Date.now()
+    });
+  };
+
+  // ✅ Real tab/browser close only
+  window.addEventListener("beforeunload", handleTabClose);
+
+  return () => {
+    window.removeEventListener("beforeunload", handleTabClose);
+  };
+}, [isLoggingOut, lastValidUser]);
 
   useEffect(() => {
   const storedUser = sessionStorage.getItem('currentUser');
@@ -142,27 +154,22 @@ setLastValidUser(storedUser);
     return;
   }
   const usersRef = ref(database, 'users');
-const unsubscribe = onValue(usersRef, (snapshot) => {
-  const usersData = snapshot.val() || {};
-  const usersArray = Object.values(usersData);
-
-  // ✅ ADD THIS LINE HERE
-  if (usersArray.length === 0) return;
-
-  if (storedUser) {
-    const lowerStoredUser = storedUser.toLowerCase();
-    const userExists = usersArray.some(u =>
-      u.toLowerCase().startsWith(lowerStoredUser + ':')
-    );
-
-    if (!userExists) {
-      alert('Your account has been deleted or you are not authorized. Logging out.');
-      onLogout();
-      sessionStorage.removeItem('currentUser');
-      navigate('/');
+  const unsubscribe = onValue(usersRef, (snapshot) => {
+    const usersData = snapshot.val() || {};
+    const usersArray = Object.values(usersData);
+    if (storedUser) {
+      const lowerStoredUser = storedUser.toLowerCase();
+      const userExists = usersArray.some(u =>
+        u.toLowerCase().startsWith(lowerStoredUser + ':')
+      );
+      if (!userExists) {
+        alert('Your account has been deleted or you are not authorized. Logging out.');
+        onLogout();
+        sessionStorage.removeItem('currentUser');
+        navigate('/');
+      }
     }
-  }
-});
+  });
   return () => {
     unsubscribe();
   };
